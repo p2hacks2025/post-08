@@ -37,6 +37,19 @@ type EventsResponse = {
   events: HandwashEvent[]
 }
 
+type FamilyMember = {
+  sub: string
+  role: string
+  joinedAt: string
+  displayName?: string
+}
+
+type MembersResponse = {
+  ok: boolean
+  isOwner: boolean
+  members: FamilyMember[]
+}
+
 // 現在選択中のファミリーID（sessionStorageで共有してmain.tsでも使う）
 const STORAGE_FAMILY_ID = 'selected:familyId'
 
@@ -135,6 +148,40 @@ async function recordHandwashEvent(familyId: string, mode?: string): Promise<{ o
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ familyId, mode, durationSec: 20 }),
+    })
+    return await res.json()
+  } catch (e) {
+    return { ok: false, message: String(e) }
+  }
+}
+
+async function fetchFamilyMembers(familyId: string): Promise<MembersResponse | null> {
+  const idToken = getIdToken()
+  if (!idToken) return null
+
+  try {
+    const res = await fetch(`${API_URL}/families/members?familyId=${familyId}`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+async function sendPushToUser(familyId: string, targetSub: string, message: string): Promise<{ ok: boolean; message?: string; sent?: number }> {
+  const idToken = getIdToken()
+  if (!idToken) return { ok: false, message: 'Not logged in' }
+
+  try {
+    const res = await fetch(`${API_URL}/push/send`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ familyId, targetSub, message }),
     })
     return await res.json()
   } catch (e) {
@@ -259,6 +306,18 @@ function renderLoggedIn(me: MeResponse) {
         </div>
         <div id="joinResult" class="result-box"></div>
       </div>
+
+      <hr class="divider" />
+
+      <!-- メンバー一覧セクション -->
+      <h2 class="h2">👨‍👩‍👧‍👦 ファミリーメンバー</h2>
+      ${selectedFamilyId ? `
+        <div id="membersList" class="members-list">
+          <p class="p muted">読み込み中...</p>
+        </div>
+      ` : `
+        <p class="p muted">ファミリーを選択してください</p>
+      `}
 
       <hr class="divider" />
 
@@ -457,9 +516,10 @@ function renderLoggedIn(me: MeResponse) {
     location.href = '../'
   })
 
-  // 履歴読み込み
+  // 履歴・メンバー読み込み
   if (selectedFamilyId) {
     loadHistory()
+    loadMembers(me)
   }
 }
 
@@ -495,6 +555,103 @@ async function loadHistory() {
   `).join('')
 
   historyEl.innerHTML = eventsHtml
+}
+
+async function loadMembers(me: MeResponse) {
+  if (!selectedFamilyId) return
+
+  const membersEl = document.getElementById('membersList')
+  if (!membersEl) return
+
+  membersEl.innerHTML = '<p class="p muted">読み込み中...</p>'
+
+  const data = await fetchFamilyMembers(selectedFamilyId)
+
+  if (!data || !data.ok) {
+    membersEl.innerHTML = '<p class="p muted">メンバーを取得できませんでした</p>'
+    return
+  }
+
+  if (data.members.length === 0) {
+    membersEl.innerHTML = '<p class="p muted">メンバーがいません</p>'
+    return
+  }
+
+  const membersHtml = data.members.map(member => {
+    const isMe = member.sub === me.sub
+    const displayName = member.displayName || member.sub.slice(0, 8) + '...'
+    const roleLabel = member.role === 'owner' ? 'オーナー' : 'メンバー'
+    
+    // オーナーは自分以外のメンバーに通知を送れる
+    const canSendNotification = data.isOwner && !isMe
+    
+    return `
+      <div class="member-item ${isMe ? 'is-me' : ''}">
+        <div class="member-info">
+          <div class="member-name">
+            ${isMe ? '👤 ' : ''}${escapeHtml(displayName)}
+            ${isMe ? '<span class="badge-tiny">あなた</span>' : ''}
+          </div>
+          <div class="member-role">
+            <span class="badge-small ${member.role === 'owner' ? 'owner' : ''}">${roleLabel}</span>
+          </div>
+        </div>
+        ${canSendNotification ? `
+          <button class="btn btn-small notify-btn" data-target-sub="${member.sub}" data-name="${escapeHtml(displayName)}">
+            📢 通知
+          </button>
+        ` : ''}
+      </div>
+    `
+  }).join('')
+
+  membersEl.innerHTML = `
+    <div class="members-container">
+      ${membersHtml}
+    </div>
+    <div id="sendNotificationResult" class="result-box"></div>
+  `
+
+  // 通知ボタンのイベント
+  membersEl.querySelectorAll('.notify-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const target = e.currentTarget as HTMLButtonElement
+      const targetSub = target.getAttribute('data-target-sub')
+      const targetName = target.getAttribute('data-name')
+      
+      if (!targetSub || !selectedFamilyId) return
+
+      const message = `${targetName}さん、手洗いしましょう！🧼`
+      
+      target.textContent = '送信中...'
+      target.disabled = true
+
+      const result = await sendPushToUser(selectedFamilyId, targetSub, message)
+      const resultEl = document.getElementById('sendNotificationResult')
+
+      if (result.ok) {
+        if (resultEl) {
+          if (result.sent && result.sent > 0) {
+            resultEl.innerHTML = `<span class="success">📢 ${escapeHtml(targetName || '')}さんに通知を送りました！</span>`
+          } else {
+            resultEl.innerHTML = `<span class="warning">⚠️ ${escapeHtml(targetName || '')}さんは通知を有効にしていません</span>`
+          }
+        }
+        target.textContent = '✓ 送信済'
+        setTimeout(() => {
+          target.textContent = '📢 通知'
+          target.disabled = false
+          if (resultEl) resultEl.innerHTML = ''
+        }, 3000)
+      } else {
+        if (resultEl) {
+          resultEl.innerHTML = `<span class="error">${escapeHtml(result.message || 'エラーが発生しました')}</span>`
+        }
+        target.textContent = '📢 通知'
+        target.disabled = false
+      }
+    })
+  })
 }
 
 function escapeHtml(str: string): string {

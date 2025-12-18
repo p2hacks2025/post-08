@@ -34,8 +34,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         pk: `USER#${sub}`,
         sk: `FAMILY#${familyId}`,
         familyId,
+        userSub: sub,
         role: "member",
         joinedAt: now,
+        // GSI1: FAMILY → MEMBERs lookup
+        gsi1pk: `FAMILY#${familyId}`,
+        gsi1sk: `MEMBER#${sub}`,
       },
       ConditionExpression: "attribute_not_exists(pk)",
     }))

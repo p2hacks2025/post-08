@@ -106,6 +106,24 @@ export class ApiStack extends cdk.Stack {
       memorySize: 512,
     })
 
+    const listFamilyMembersFn = new NodejsFunction(this, 'ListFamilyMembersFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(__dirname, '..', 'lambda', 'list-family-members.ts'),
+      handler: 'handler',
+      environment: lambdaEnv,
+    })
+
+    const sendPushToUserFn = new NodejsFunction(this, 'SendPushToUserFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(__dirname, '..', 'lambda', 'send-push-to-user.ts'),
+      handler: 'handler',
+      environment: {
+        ...lambdaEnv,
+        VAPID_SECRET_NAME: vapidSecretName,
+      },
+      timeout: cdk.Duration.seconds(30),
+    })
+
     // 4) Permissions
     table.grantReadData(meFn)
     table.grantReadWriteData(createFamilyFn)
@@ -118,6 +136,11 @@ export class ApiStack extends cdk.Stack {
 
     // VAPID秘密鍵への読み取り権限
     vapidSecret.grantRead(sendReminderFn)
+    vapidSecret.grantRead(sendPushToUserFn)
+
+    // メンバー一覧・通知送信
+    table.grantReadData(listFamilyMembersFn)
+    table.grantReadWriteData(sendPushToUserFn)
 
     // 5) EventBridge Scheduler for daily reminder (20:00 JST = 11:00 UTC)
     new events.Rule(this, 'ReminderSchedule', {
@@ -194,6 +217,20 @@ export class ApiStack extends cdk.Stack {
       path: '/push/subscribe',
       methods: [apigwv2.HttpMethod.POST],
       integration: new integrations.HttpLambdaIntegration('PushSubscribeIntegration', pushSubscribeFn),
+      authorizer: jwtAuthorizer,
+    })
+
+    httpApi.addRoutes({
+      path: '/families/members',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new integrations.HttpLambdaIntegration('ListFamilyMembersIntegration', listFamilyMembersFn),
+      authorizer: jwtAuthorizer,
+    })
+
+    httpApi.addRoutes({
+      path: '/push/send',
+      methods: [apigwv2.HttpMethod.POST],
+      integration: new integrations.HttpLambdaIntegration('SendPushToUserIntegration', sendPushToUserFn),
       authorizer: jwtAuthorizer,
     })
 
