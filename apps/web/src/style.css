@@ -388,6 +388,15 @@ li {
   flex-wrap: wrap;
 }
 
+.version-info {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  font-family: 'JetBrains Mono', monospace;
+}
+
 .feature-item {
   display: flex;
   align-items: center;

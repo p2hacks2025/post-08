@@ -6,6 +6,19 @@ declare let self: ServiceWorkerGlobalScope
 // Workboxのプリキャッシュ（vite-plugin-pwaが自動的にマニフェストを注入）
 precacheAndRoute(self.__WB_MANIFEST)
 
+// 明示的なfetchハンドラー（PWAインストール条件を満たすため）
+self.addEventListener('fetch', (event) => {
+  // Workboxが処理しないリクエストはネットワークから取得
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        // オフライン時はキャッシュから返す
+        return caches.match(event.request) as Promise<Response>
+      })
+    )
+  }
+})
+
 // Push通知の受信
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {}

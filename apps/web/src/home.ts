@@ -62,14 +62,15 @@ function renderHome() {
           : 'ログインして、手洗い履歴の記録・家族との共有・リマインド通知を使いましょう！'}
       </p>
     </div>
+    <div class="version-info">v1.0.0</div>
   `
 
   if (loggedIn) {
     document.getElementById('startWash')!.addEventListener('click', () => {
-      location.href = './wash/'
+      location.href = '/wash/'
     })
     document.getElementById('goMypage')!.addEventListener('click', () => {
-      location.href = './mypage/'
+      location.href = '/mypage/'
     })
   } else {
     document.getElementById('login')!.addEventListener('click', () => startLogin())

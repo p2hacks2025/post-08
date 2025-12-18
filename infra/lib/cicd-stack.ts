@@ -84,22 +84,40 @@ export class CicdStack extends cdk.Stack {
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       },
       defaultRootObject: 'index.html',
-      // SPAのフォールバック設定（404 → index.html）
-      errorResponses: [
-        {
-          httpStatus: 403,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-          ttl: cdk.Duration.seconds(0),
-        },
-        {
-          httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-          ttl: cdk.Duration.seconds(0),
-        },
-      ],
+      // MPA: 各ディレクトリにindex.htmlがあるのでSPAフォールバックは不要
+      // CloudFront Functionsでディレクトリアクセス時にindex.htmlを追加
     })
+
+    // CloudFront Function: ディレクトリアクセス時に /index.html を追加
+    const rewriteFunction = new cloudfront.Function(this, 'RewriteFunction', {
+      code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  
+  // URIが / で終わる場合は index.html を追加
+  if (uri.endsWith('/')) {
+    request.uri += 'index.html';
+  }
+  // 拡張子がない場合は /index.html を追加
+  else if (!uri.includes('.')) {
+    request.uri += '/index.html';
+  }
+  
+  return request;
+}
+      `),
+      functionName: 'HandwashRewriteFunction',
+    })
+
+    // CloudFront Distributionにfunctionを追加
+    const cfnDistribution = this.webDistribution.node.defaultChild as cloudfront.CfnDistribution
+    cfnDistribution.addPropertyOverride('DistributionConfig.DefaultCacheBehavior.FunctionAssociations', [
+      {
+        EventType: 'viewer-request',
+        FunctionARN: rewriteFunction.functionArn,
+      },
+    ])
 
     // =================================================================
     // 5) Outputs
