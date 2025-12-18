@@ -384,3 +384,8 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
 # End of https://www.toptal.com/developers/gitignore/api/python,unity,node
+
+### AWS CDK ###
+cdk.out/
+.cdk.staging/
+cdk.context.json

@@ -110,3 +110,150 @@ li {
   font-weight: 800;
   cursor: pointer;
 }
+
+/* マイページ用 */
+.h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: #111827;
+}
+
+.divider {
+  margin: 16px 0;
+  border: none;
+  border-top: 1px solid #e5e7eb;
+}
+
+.user-info {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.user-email {
+  font-weight: 600;
+  color: #374151;
+}
+
+.family-list {
+  margin-bottom: 12px;
+}
+
+.family-item {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.family-name {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.family-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.badge-small {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.badge-small.owner {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.action-section {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.form-section {
+  background: #f3f4f6;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.form-section.hidden {
+  display: none;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.result-box {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.success {
+  color: #059669;
+  font-weight: 600;
+}
+
+.error {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.muted {
+  color: #9ca3af;
+}
+
+.invite-code-box {
+  background: #ecfdf5;
+  border: 2px dashed #10b981;
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.invite-label {
+  font-size: 11px;
+  color: #059669;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.invite-code {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #047857;
+}
+
+.invite-hint {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 6px;
+}
