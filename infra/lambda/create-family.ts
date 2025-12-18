@@ -27,7 +27,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const inviteHash = sha256Hex(inviteCode)
   const now = new Date().toISOString()
 
-  // 1) Family META
+  // 1) Family META（招待コードも保存してオーナーが後で確認できるように）
   await doc.send(new PutCommand({
     TableName: TABLE_NAME,
     Item: {
@@ -38,6 +38,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       createdAt: now,
       createdBy: sub,
       inviteHash,
+      inviteCode, // オーナーが後で確認できるように保存
     },
     ConditionExpression: "attribute_not_exists(pk)",
   }))

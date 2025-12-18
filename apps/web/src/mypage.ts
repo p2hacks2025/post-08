@@ -48,6 +48,7 @@ type MembersResponse = {
   ok: boolean
   isOwner: boolean
   members: FamilyMember[]
+  inviteCode?: string
 }
 
 // 現在選択中のファミリーID（sessionStorageで共有してmain.tsでも使う）
@@ -605,12 +606,44 @@ async function loadMembers(me: MeResponse) {
     `
   }).join('')
 
+  // オーナー向け招待コード表示
+  const inviteCodeHtml = data.isOwner && data.inviteCode ? `
+    <div class="invite-code-section">
+      <div class="invite-label">📋 招待コード</div>
+      <div class="invite-code-display">
+        <span class="invite-code-value">${escapeHtml(data.inviteCode)}</span>
+        <button class="btn btn-small copy-btn" id="copyInviteCode">コピー</button>
+      </div>
+      <div class="invite-hint">このコードを家族に共有してください</div>
+    </div>
+  ` : ''
+
   membersEl.innerHTML = `
+    ${inviteCodeHtml}
     <div class="members-container">
       ${membersHtml}
     </div>
     <div id="sendNotificationResult" class="result-box"></div>
   `
+
+  // 招待コードコピーボタン
+  const copyBtn = document.getElementById('copyInviteCode')
+  if (copyBtn && data.inviteCode) {
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(data.inviteCode!)
+        copyBtn.textContent = '✓ コピーしました'
+        setTimeout(() => {
+          copyBtn.textContent = 'コピー'
+        }, 2000)
+      } catch {
+        copyBtn.textContent = 'コピー失敗'
+        setTimeout(() => {
+          copyBtn.textContent = 'コピー'
+        }, 2000)
+      }
+    })
+  }
 
   // 通知ボタンのイベント
   membersEl.querySelectorAll('.notify-btn').forEach(btn => {
