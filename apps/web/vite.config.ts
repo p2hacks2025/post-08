@@ -8,13 +8,24 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
+        wash: resolve(__dirname, 'wash/index.html'),
         mypage: resolve(__dirname, 'mypage/index.html'),
       },
     },
   },
   plugins: [
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
+      devOptions: {
+        enabled: true,
+        type: 'module',
+      },
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
+      },
       manifest: {
         name: '手洗いサポート',
         short_name: '手洗い',
@@ -27,9 +38,6 @@ export default defineConfig({
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
         ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
       },
     }),
   ],

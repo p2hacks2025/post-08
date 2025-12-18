@@ -339,3 +339,138 @@ li {
   font-size: 14px;
   margin-bottom: 12px;
 }
+
+/* 通知設定 */
+.notification-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.notification-status.enabled {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.notification-status.disabled {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.notification-icon {
+  font-size: 16px;
+}
+
+/* ホームページ */
+.home-card {
+  text-align: center;
+}
+
+.home-hero {
+  padding: 20px 0;
+}
+
+.home-icon {
+  font-size: 64px;
+  margin-bottom: 8px;
+}
+
+.home-features {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #f3f4f6;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.feature-icon {
+  font-size: 16px;
+}
+
+.btn-large {
+  width: 100%;
+  padding: 16px;
+  font-size: 16px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.home-header {
+  margin-bottom: 16px;
+}
+
+.user-greeting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.greeting-icon {
+  font-size: 20px;
+}
+
+.current-family {
+  background: #eff6ff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.family-label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.family-name-large {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.no-family-notice {
+  background: #fef3c7;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  color: #92400e;
+}
+
+.no-family-notice p {
+  margin: 0;
+}
+
+.no-family-notice .small {
+  margin-top: 4px;
+  color: #b45309;
+}
+
+.flex-1 {
+  flex: 1;
+}

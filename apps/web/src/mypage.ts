@@ -1,6 +1,7 @@
-// src/mypage.ts - マイページ（ファミリー管理 + 履歴表示対応）
+// src/mypage.ts - マイページ（ファミリー管理 + 履歴表示 + Push通知対応）
 import './style.css'
 import { handleCallbackIfPresent, isLoggedIn, startLogin, getIdToken, logout } from './auth'
+import { isPushSupported, getNotificationPermission, subscribePush } from './push'
 
 const API_URL = import.meta.env.VITE_API_URL as string
 
@@ -151,23 +152,6 @@ function renderLoading() {
   `
 }
 
-function renderLoggedOut() {
-  app.innerHTML = `
-    <div class="card">
-      <h1 class="h1">マイページ</h1>
-      <p class="p">ログインして履歴やファミリー設定を管理できます。</p>
-      <div class="row">
-        <button class="btn" id="login">ログイン</button>
-        <button class="btn secondary" id="back">戻る</button>
-      </div>
-    </div>
-  `
-  document.getElementById('login')!.addEventListener('click', () => startLogin())
-  document.getElementById('back')!.addEventListener('click', () => {
-    location.href = '../index.html'
-  })
-}
-
 function formatTime(ms: number): string {
   const d = new Date(ms)
   return d.toLocaleString('ja-JP', {
@@ -182,6 +166,40 @@ function getModeLabel(mode?: string): string {
   if (mode === 'home') return '帰宅時'
   if (mode === 'meal') return '食事前'
   return '手洗い'
+}
+
+function renderNotificationSection(): string {
+  if (!isPushSupported()) {
+    return '<p class="p muted">このブラウザはプッシュ通知に対応していません</p>'
+  }
+
+  const permission = getNotificationPermission()
+
+  if (permission === 'granted') {
+    return `
+      <div class="notification-status enabled">
+        <span class="notification-icon">✓</span>
+        <span>通知は有効です</span>
+      </div>
+      <p class="p muted" style="font-size: 12px;">毎日夜に手洗いリマインドが届きます</p>
+    `
+  }
+
+  if (permission === 'denied') {
+    return `
+      <div class="notification-status disabled">
+        <span class="notification-icon">✕</span>
+        <span>通知がブロックされています</span>
+      </div>
+      <p class="p muted" style="font-size: 12px;">ブラウザの設定から通知を許可してください</p>
+    `
+  }
+
+  return `
+    <p class="p" style="font-size: 13px;">手洗いを忘れないようにリマインド通知を受け取れます</p>
+    <button class="btn" id="enableNotification">🔔 通知を有効にする</button>
+    <div id="notificationResult" class="result-box"></div>
+  `
 }
 
 function renderLoggedIn(me: MeResponse) {
@@ -257,6 +275,12 @@ function renderLoggedIn(me: MeResponse) {
       ` : `
         <p class="p muted">ファミリーを選択または作成してください</p>
       `}
+
+      <hr class="divider" />
+
+      <!-- 通知設定セクション -->
+      <h2 class="h2">🔔 リマインド通知</h2>
+      ${renderNotificationSection()}
 
       <hr class="divider" />
 
@@ -396,10 +420,41 @@ function renderLoggedIn(me: MeResponse) {
     })
   }
 
+  // 通知有効化ボタン
+  const enableNotificationBtn = document.getElementById('enableNotification')
+  if (enableNotificationBtn) {
+    enableNotificationBtn.addEventListener('click', async () => {
+      const idToken = getIdToken()
+      if (!idToken || !selectedFamilyId) {
+        const resultEl = document.getElementById('notificationResult')
+        if (resultEl) {
+          resultEl.innerHTML = '<span class="error">ファミリーを選択してください</span>'
+        }
+        return
+      }
+
+      enableNotificationBtn.textContent = '設定中...'
+      const result = await subscribePush(idToken, selectedFamilyId)
+
+      const resultEl = document.getElementById('notificationResult')
+      if (result.ok) {
+        if (resultEl) {
+          resultEl.innerHTML = '<span class="success">通知を有効にしました！</span>'
+        }
+        setTimeout(() => renderLoggedIn(me), 1500)
+      } else {
+        if (resultEl) {
+          resultEl.innerHTML = `<span class="error">${escapeHtml(result.message || 'エラーが発生しました')}</span>`
+        }
+        enableNotificationBtn.textContent = '🔔 通知を有効にする'
+      }
+    })
+  }
+
   document.getElementById('refresh')!.addEventListener('click', () => loadAndRender())
   document.getElementById('logout')!.addEventListener('click', () => logout())
   document.getElementById('back')!.addEventListener('click', () => {
-    location.href = '../index.html'
+    location.href = '../'
   })
 
   // 履歴読み込み
@@ -453,14 +508,16 @@ function escapeHtml(str: string): string {
 async function loadAndRender() {
   renderLoading()
 
+  // 未ログインならCognito認証へリダイレクト
   if (!isLoggedIn()) {
-    renderLoggedOut()
+    startLogin()
     return
   }
 
   const me = await fetchMe()
   if (!me) {
-    renderLoggedOut()
+    // API失敗時も再ログインを促す
+    startLogin()
     return
   }
 

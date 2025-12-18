@@ -15,14 +15,17 @@
   "type": "commonjs",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/client-secrets-manager": "^3.700.0",
     "@aws-sdk/lib-dynamodb": "^3.700.0",
     "@types/aws-lambda": "^8.10.147",
     "aws-cdk-lib": "^2.232.2",
     "constructs": "^10.4.4",
-    "source-map-support": "^0.5.21"
+    "source-map-support": "^0.5.21",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
+    "@types/web-push": "^3.6.4",
     "aws-cdk": "^2.1034.0",
     "esbuild": "^0.24.0",
     "ts-node": "^10.9.2",

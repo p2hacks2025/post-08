@@ -3,11 +3,21 @@ import { randomString, sha256Base64Url } from './pkce'
 
 const COGNITO_DOMAIN = import.meta.env.VITE_COGNITO_DOMAIN as string
 const CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID as string
-const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI as string
 
 const STORAGE_VERIFIER = 'pkce:verifier'
 const STORAGE_STATE = 'pkce:state'
 const STORAGE_TOKENS = 'auth:tokens'
+const STORAGE_REDIRECT_URI = 'pkce:redirect_uri'
+
+// 現在のページをリダイレクトURIとして使用
+function getCurrentRedirectUri(): string {
+  // パスの末尾を / で終わらせる（Cognitoの設定と一致させる）
+  let path = window.location.pathname
+  if (!path.endsWith('/')) {
+    path += '/'
+  }
+  return window.location.origin + path
+}
 
 type TokenResponse = {
   access_token: string
@@ -36,14 +46,16 @@ export async function startLogin(): Promise<void> {
   const verifier = randomString(80)
   const challenge = await sha256Base64Url(verifier)
   const state = randomString(24)
+  const redirectUri = getCurrentRedirectUri()
 
   sessionStorage.setItem(STORAGE_VERIFIER, verifier)
   sessionStorage.setItem(STORAGE_STATE, state)
+  sessionStorage.setItem(STORAGE_REDIRECT_URI, redirectUri)
 
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
     scope: 'openid email profile',
     state,
     code_challenge: challenge,
@@ -63,6 +75,7 @@ export async function handleCallbackIfPresent(): Promise<boolean> {
 
   const expectedState = sessionStorage.getItem(STORAGE_STATE)
   const verifier = sessionStorage.getItem(STORAGE_VERIFIER)
+  const redirectUri = sessionStorage.getItem(STORAGE_REDIRECT_URI) || getCurrentRedirectUri()
 
   // stateチェック（CSRF対策）
   if (!expectedState || !returnedState || expectedState !== returnedState) {
@@ -76,7 +89,7 @@ export async function handleCallbackIfPresent(): Promise<boolean> {
     grant_type: 'authorization_code',
     client_id: CLIENT_ID,
     code,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
     code_verifier: verifier,
   })
 
@@ -106,10 +119,11 @@ export function logout(): void {
   sessionStorage.removeItem(STORAGE_TOKENS)
   sessionStorage.removeItem(STORAGE_VERIFIER)
   sessionStorage.removeItem(STORAGE_STATE)
+  sessionStorage.removeItem(STORAGE_REDIRECT_URI)
 
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
-    logout_uri: REDIRECT_URI,
+    logout_uri: window.location.origin + '/',
   })
   window.location.assign(`${COGNITO_DOMAIN}/logout?${params.toString()}`)
 }

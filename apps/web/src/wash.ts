@@ -1,8 +1,6 @@
+// src/wash.ts - 手洗いタイマー
 import './style.css'
-import { registerSW } from 'virtual:pwa-register'
-import { getIdToken, isLoggedIn } from './auth'
-
-registerSW({ immediate: true })
+import { getIdToken, isLoggedIn, startLogin, handleCallbackIfPresent } from './auth'
 
 const API_URL = import.meta.env.VITE_API_URL as string
 const STORAGE_FAMILY_ID = 'selected:familyId'
@@ -18,14 +16,14 @@ type Step = {
   title: string
   text?: string
   mediaType: MediaType
-  src?: string // public/ に置いたファイルを /xxx.png みたいに指定
+  src?: string
 }
 
 const STEPS: Step[] = [
-  { title: '手をぬらす', mediaType: 'image', src: '/steps/01.png' }, // ←後で差し替え
+  { title: '手をぬらす', mediaType: 'image', src: '/steps/01.png' },
   { title: 'せっけんをつける', mediaType: 'image', src: '/steps/02.png' },
-  { title: '手のひら/甲/指の間', mediaType: 'video', src: '/steps/demo.webm' }, // 動画でもOK
-  { title: '親指・指先・手首', mediaType: 'none' }, // まだ素材がないなら none でOK
+  { title: '手のひら/甲/指の間', mediaType: 'video', src: '/steps/demo.webm' },
+  { title: '親指・指先・手首', mediaType: 'none' },
   { title: 'すすぐ→ふく', mediaType: 'none' },
 ]
 
@@ -55,6 +53,7 @@ async function requestWakeLock() {
     }
   } catch {}
 }
+
 async function releaseWakeLock() {
   try {
     if (wakeLock) {
@@ -83,7 +82,6 @@ function startTimer() {
     remaining -= 1
     if (remaining <= 0) {
       stopTimer()
-      // 完了時の“フック”（後でAPI繋ぐ）
       void onComplete('timer')
       renderDone()
       return
@@ -94,8 +92,6 @@ function startTimer() {
 
 // --- Backend API call ---
 async function onComplete(reason: 'timer' | 'skip') {
-  // ログイン済み＆ファミリー選択済みなら記録をAPIに送信
-  // 失敗してもUXを壊さない（サイレントに処理）
   try {
     const idToken = getIdToken()
     const familyId = getSelectedFamilyId()
@@ -110,7 +106,6 @@ async function onComplete(reason: 'timer' | 'skip') {
 
     console.log('handwash complete:', payload)
 
-    // ログイン済み＆ファミリー選択済みならAPIに送信
     if (idToken && familyId && API_URL) {
       const res = await fetch(`${API_URL}/handwash/events`, {
         method: 'POST',
@@ -143,18 +138,19 @@ async function onComplete(reason: 'timer' | 'skip') {
 function renderSelect() {
   setHTML(`
     <div class="card">
-      <h1 class="h1">手洗いサポート</h1>
-      <p class="p">NFCで開いたら、どっちかをタップしてスタート。</p>
+      <h1 class="h1">🧼 手洗いタイマー</h1>
+      <p class="p">どっちかをタップしてスタート！</p>
 
       <div class="row">
-        <button class="btn" id="home">帰ってきたとき</button>
-        <button class="btn" id="meal">ごはんのまえ</button>
+        <button class="btn" id="home">🏠 帰ってきたとき</button>
+        <button class="btn" id="meal">🍽️ ごはんのまえ</button>
       </div>
 
-      <p class="small">
-        ※ Android中心。iPhoneは通知タップが必要な場合があります。<br/>
-        ※ 初回は通信が必要。以降はキャッシュで表示できます。
-      </p>
+      <div style="height: 16px"></div>
+
+      <div class="row">
+        <button class="btn secondary" id="backHome">← ホームへ戻る</button>
+      </div>
     </div>
   `)
 
@@ -168,10 +164,12 @@ function renderSelect() {
     startTimer()
     renderWash()
   })
+  document.getElementById('backHome')!.addEventListener('click', () => {
+    location.href = '../'
+  })
 }
 
 function currentStepIndex(): number {
-  // 20秒を手順数で割って、だいたい均等に進める（好みで調整OK）
   const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
   const seg = Math.max(1, Math.floor(20 / STEPS.length))
   return Math.min(STEPS.length - 1, Math.floor(elapsed / seg))
@@ -182,7 +180,6 @@ function renderMedia(step: Step) {
     return `<div class="media"><img alt="${step.title}" src="${step.src}" /></div>`
   }
   if (step.mediaType === 'video' && step.src) {
-    // muted を付けると自動再生の制約が緩い（端末/ブラウザ依存）
     return `<div class="media"><video src="${step.src}" playsinline muted autoplay loop></video></div>`
   }
   return `<div class="media"><div style="padding:14px;font-weight:800;color:#6b7280;">ここに画像/アニメを入れられます</div></div>`
@@ -193,8 +190,7 @@ function renderWash() {
   const step = STEPS[idx]
   const badge = mode ? `<div class="badge">${modeLabel(mode)}</div>` : ''
   const timerText = String(Math.max(remaining, 0)).padStart(2, '0')
-
-  const showSkip = (20 - remaining) >= 8 // 8秒経ったらスキップ表示（調整OK）
+  const showSkip = (20 - remaining) >= 8
 
   setHTML(`
     <div class="card">
@@ -218,8 +214,6 @@ function renderWash() {
         <button class="btn secondary" id="restart">さいしょから(20秒)</button>
         <button class="btn secondary" id="back">もどる</button>
       </div>
-
-      <p class="small">素材は後から差し替えでOK（/public/steps/ に置く想定）。</p>
     </div>
   `)
 
@@ -264,7 +258,7 @@ function renderDone() {
 
       <div class="row">
         <button class="btn" id="again">もういちど</button>
-        <button class="btn secondary" id="top">トップへ</button>
+        <button class="btn secondary" id="backHome">ホームへ</button>
       </div>
 
       <div style="height:10px"></div>
@@ -272,8 +266,6 @@ function renderDone() {
       <div class="row">
         <button class="btn secondary" id="mypage">マイページへ</button>
       </div>
-
-      <p class="small">マイページで履歴確認・ファミリー管理ができます。</p>
     </div>
   `)
 
@@ -281,13 +273,11 @@ function renderDone() {
     startTimer()
     renderWash()
   })
-  document.getElementById('top')!.addEventListener('click', () => {
-    mode = null
-    renderSelect()
+  document.getElementById('backHome')!.addEventListener('click', () => {
+    location.href = '../'
   })
   document.getElementById('mypage')!.addEventListener('click', () => {
-    // 別ページ（MPA）へ遷移：PWAのオフラインでも確実に開けるように実ファイルへ
-    location.href = './mypage/index.html'
+    location.href = '../mypage/'
   })
 }
 
@@ -297,9 +287,21 @@ document.addEventListener('visibilitychange', async () => {
   }
 })
 
-function render() {
-  // 通常フロー
-  renderSelect()
-}
+// --- Main ---
+;(async () => {
+  try {
+    // OAuth callback handling
+    await handleCallbackIfPresent()
+  } catch (e) {
+    console.error('Callback handling failed:', e)
+  }
 
-render()
+  // 未ログインならCognito認証へリダイレクト
+  if (!isLoggedIn()) {
+    startLogin()
+    return
+  }
+
+  renderSelect()
+})()
+
