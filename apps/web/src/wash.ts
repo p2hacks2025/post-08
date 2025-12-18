@@ -13,6 +13,47 @@ function getSelectedFamilyId(): string | null {
   return sessionStorage.getItem(STORAGE_FAMILY_ID)
 }
 
+function setSelectedFamilyId(familyId: string): void {
+  sessionStorage.setItem(STORAGE_FAMILY_ID, familyId)
+}
+
+// ファミリーを自動選択（未選択の場合）
+async function ensureFamilySelected(): Promise<boolean> {
+  // 既に選択されていればOK
+  if (getSelectedFamilyId()) {
+    return true
+  }
+
+  const idToken = getIdToken()
+  if (!idToken || !API_URL) {
+    return false
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/families`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    })
+    if (!res.ok) return false
+
+    const data = await res.json()
+    const families = data.families as { familyId: string; name: string }[]
+
+    if (families.length === 0) {
+      console.log('No families found. User should create or join one.')
+      return false
+    }
+
+    // 最初のファミリーを自動選択
+    const firstFamily = families[0]
+    setSelectedFamilyId(firstFamily.familyId)
+    console.log(`Auto-selected family: ${firstFamily.name} (${firstFamily.familyId})`)
+    return true
+  } catch (e) {
+    console.warn('Failed to fetch families:', e)
+    return false
+  }
+}
+
 type Mode = 'home' | 'meal'
 type Phase = 'idle' | 'intro' | 'playing' | 'select' | 'done'
 
@@ -339,7 +380,7 @@ function renderDone() {
           <div class="done-recorded">✓ 記録しました</div>
         ` : `
           <div class="done-notice">
-            ${!loggedIn ? 'ログインすると履歴が記録されます' : 'マイページでファミリーを選択すると記録されます'}
+            ${!loggedIn ? 'ログインすると履歴が記録されます' : 'マイページでファミリーを作成/参加すると記録されます'}
           </div>
         `}
 
@@ -373,6 +414,12 @@ document.addEventListener('visibilitychange', async () => {
   if (!isLoggedIn()) {
     startLogin()
     return
+  }
+
+  // ファミリーが選択されていなければ自動選択を試みる
+  const hasFamilySelected = await ensureFamilySelected()
+  if (!hasFamilySelected) {
+    console.log('No family selected and none available. Proceeding without recording.')
   }
 
   // 即座に手洗い開始

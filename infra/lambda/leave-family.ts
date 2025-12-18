@@ -63,3 +63,4 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   return json(200, { ok: true, message: "Left the family successfully" })
 }
 
+
