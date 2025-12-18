@@ -1,0 +1,135 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # 手動実行も可能
+
+permissions:
+  id-token: write   # OIDC認証に必要
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  NODE_VERSION: '20'
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+
+    steps:
+      # ===========================================
+      # 1) Checkout
+      # ===========================================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ===========================================
+      # 2) Node.js セットアップ
+      # ===========================================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # ===========================================
+      # 3) AWS認証 (OIDC - アクセスキー不要！)
+      # ===========================================
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ===========================================
+      # 4) 依存関係インストール
+      # ===========================================
+      - name: Install dependencies
+        run: npm ci
+
+      # ===========================================
+      # 5) CDK Deploy (Infra + API)
+      # ===========================================
+      - name: CDK Deploy
+        working-directory: infra
+        run: |
+          npm ci
+          npx cdk deploy --all --require-approval never
+
+      # ===========================================
+      # 6) Get CDK Outputs
+      # ===========================================
+      - name: Get CDK Outputs
+        id: cdk-outputs
+        run: |
+          # CloudFormationからOutput取得
+          WEB_BUCKET=$(aws cloudformation describe-stacks --stack-name CicdStack --query "Stacks[0].Outputs[?OutputKey=='WebBucketName'].OutputValue" --output text)
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name CicdStack --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
+          CF_DOMAIN=$(aws cloudformation describe-stacks --stack-name CicdStack --query "Stacks[0].Outputs[?OutputKey=='DistributionDomainName'].OutputValue" --output text)
+          API_URL=$(aws cloudformation describe-stacks --stack-name ApiStack --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          COGNITO_DOMAIN=$(aws cloudformation describe-stacks --stack-name AuthStack --query "Stacks[0].Outputs[?OutputKey=='CognitoDomain'].OutputValue" --output text)
+          COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name AuthStack --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
+          
+          echo "web_bucket=$WEB_BUCKET" >> $GITHUB_OUTPUT
+          echo "distribution_id=$DISTRIBUTION_ID" >> $GITHUB_OUTPUT
+          echo "cf_domain=$CF_DOMAIN" >> $GITHUB_OUTPUT
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "cognito_domain=$COGNITO_DOMAIN" >> $GITHUB_OUTPUT
+          echo "cognito_client_id=$COGNITO_CLIENT_ID" >> $GITHUB_OUTPUT
+
+      # ===========================================
+      # 7) Web Build
+      # ===========================================
+      - name: Build Web
+        working-directory: apps/web
+        env:
+          VITE_API_URL: ${{ steps.cdk-outputs.outputs.api_url }}
+          VITE_COGNITO_DOMAIN: ${{ steps.cdk-outputs.outputs.cognito_domain }}
+          VITE_COGNITO_CLIENT_ID: ${{ steps.cdk-outputs.outputs.cognito_client_id }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+        run: |
+          npm ci
+          npm run build
+
+      # ===========================================
+      # 8) S3 Sync
+      # ===========================================
+      - name: Deploy to S3
+        run: |
+          aws s3 sync apps/web/dist s3://${{ steps.cdk-outputs.outputs.web_bucket }} \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "*.html" \
+            --exclude "manifest.webmanifest" \
+            --exclude "sw.js"
+          
+          # HTML/manifest/swは短いキャッシュ
+          aws s3 sync apps/web/dist s3://${{ steps.cdk-outputs.outputs.web_bucket }} \
+            --cache-control "public, max-age=0, must-revalidate" \
+            --include "*.html" \
+            --include "manifest.webmanifest" \
+            --include "sw.js"
+
+      # ===========================================
+      # 9) CloudFront Invalidation
+      # ===========================================
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.cdk-outputs.outputs.distribution_id }} \
+            --paths "/*"
+
+      # ===========================================
+      # 10) Summary
+      # ===========================================
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Web App** | https://${{ steps.cdk-outputs.outputs.cf_domain }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **API** | ${{ steps.cdk-outputs.outputs.api_url }} |" >> $GITHUB_STEP_SUMMARY
+
