@@ -1,7 +1,15 @@
 import './style.css'
 import { registerSW } from 'virtual:pwa-register'
+import { getIdToken, isLoggedIn } from './auth'
 
 registerSW({ immediate: true })
+
+const API_URL = import.meta.env.VITE_API_URL as string
+const STORAGE_FAMILY_ID = 'selected:familyId'
+
+function getSelectedFamilyId(): string | null {
+  return sessionStorage.getItem(STORAGE_FAMILY_ID)
+}
 
 type Mode = 'home' | 'meal'
 type MediaType = 'none' | 'image' | 'video'
@@ -84,26 +92,48 @@ function startTimer() {
   }, 1000)
 }
 
-// --- Backend hook placeholders ---
+// --- Backend API call ---
 async function onComplete(reason: 'timer' | 'skip') {
-  // いまはバックエンド未実装でOK：失敗してもUXを壊さない
-  // 後で CognitoのJWTを付けて叩く想定
+  // ログイン済み＆ファミリー選択済みなら記録をAPIに送信
+  // 失敗してもUXを壊さない（サイレントに処理）
   try {
+    const idToken = getIdToken()
+    const familyId = getSelectedFamilyId()
+    const durationSec = 20 - Math.max(remaining, 0)
+
     const payload = {
       mode,
       reason,
       finishedAt: new Date().toISOString(),
-      durationSec: 20 - Math.max(remaining, 0),
+      durationSec,
     }
 
-    // 例：同一ドメイン配下に /api を置くと運用が楽
-    // await fetch('/api/wash/complete', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' /*, Authorization: `Bearer ${token}`*/ },
-    //   body: JSON.stringify(payload),
-    // })
+    console.log('handwash complete:', payload)
 
-    console.log('complete payload (mock):', payload)
+    // ログイン済み＆ファミリー選択済みならAPIに送信
+    if (idToken && familyId && API_URL) {
+      const res = await fetch(`${API_URL}/handwash/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          familyId,
+          mode,
+          durationSec,
+          note: reason === 'skip' ? 'skipped' : undefined,
+        }),
+      })
+
+      if (res.ok) {
+        console.log('handwash event recorded successfully')
+      } else {
+        console.warn('handwash event recording failed:', res.status)
+      }
+    } else {
+      console.log('not logged in or no family selected, skipping API call')
+    }
   } catch (e) {
     console.warn('complete hook failed (ignored):', e)
   }
@@ -214,11 +244,23 @@ function renderWash() {
 
 function renderDone() {
   const badge = mode ? `<div class="badge">${modeLabel(mode)}</div>` : ''
+  const loggedIn = isLoggedIn()
+  const hasFamilyId = !!getSelectedFamilyId()
+  const recorded = loggedIn && hasFamilyId
+
   setHTML(`
     <div class="card">
       ${badge}
       <h1 class="h1">おつかれさま！</h1>
       <p class="p">きれいにできたね。えらい！</p>
+
+      ${recorded ? `
+        <div class="recorded-badge">✓ 記録しました</div>
+      ` : `
+        <p class="p muted" style="font-size: 12px;">
+          ${!loggedIn ? 'ログインすると履歴が記録されます' : 'マイページでファミリーを選択すると記録されます'}
+        </p>
+      `}
 
       <div class="row">
         <button class="btn" id="again">もういちど</button>
@@ -227,14 +269,11 @@ function renderDone() {
 
       <div style="height:10px"></div>
 
-      <p class="p" style="margin-bottom:8px;">
-        ※ できればマイページで履歴も見られます（あとで実装）
-      </p>
       <div class="row">
         <button class="btn secondary" id="mypage">マイページへ</button>
       </div>
 
-      <p class="small">バックエンドができたら、ここでログイン→履歴→リマインドに繋げられます。</p>
+      <p class="small">マイページで履歴確認・ファミリー管理ができます。</p>
     </div>
   `)
 

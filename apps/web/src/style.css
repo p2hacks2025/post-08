@@ -257,3 +257,85 @@ li {
   color: #6b7280;
   margin-top: 6px;
 }
+
+/* ファミリー選択 */
+.family-list.clickable .family-item {
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  border: 2px solid transparent;
+}
+
+.family-list.clickable .family-item:hover {
+  background: #f3f4f6;
+}
+
+.family-list.clickable .family-item.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+/* 履歴セクション */
+.history-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.record-btn {
+  flex: 1;
+  font-size: 13px;
+  padding: 10px 8px;
+}
+
+.history-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+
+.history-icon {
+  font-size: 20px;
+  width: 32px;
+  text-align: center;
+}
+
+.history-content {
+  flex: 1;
+}
+
+.history-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.history-time {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.history-duration {
+  font-size: 12px;
+  color: #059669;
+  font-weight: 600;
+}
+
+/* 記録完了バッジ */
+.recorded-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  background: #ecfdf5;
+  color: #059669;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
