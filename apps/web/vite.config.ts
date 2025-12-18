@@ -3,7 +3,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { resolve } from 'node:path'
 
 export default defineConfig({
-  base: './',
+  base: '/',
   build: {
     rollupOptions: {
       input: {
@@ -30,13 +30,13 @@ export default defineConfig({
         name: '手洗いサポート',
         short_name: '手洗い',
         display: 'standalone',
-        scope: './',
-        start_url: './',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
+        scope: '/',
+        start_url: '/wash/',
+        theme_color: '#22d3ee',
+        background_color: '#22d3ee',
         icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
         ],
       },
     }),

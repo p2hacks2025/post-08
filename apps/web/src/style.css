@@ -990,6 +990,37 @@ li {
   min-width: auto;
 }
 
+.btn-danger {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: white;
+  border: none;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: white;
+  border: none;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fb923c, #f97316);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.35);
+}
+
+.family-actions {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
 .notify-btn {
   background: linear-gradient(135deg, #f59e0b, #d97706);
   color: white;

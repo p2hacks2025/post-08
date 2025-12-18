@@ -1,6 +1,10 @@
 // src/wash.ts - 手洗いタイマー（泡UI版）
 import './style.css'
+import { registerSW } from 'virtual:pwa-register'
 import { getIdToken, isLoggedIn, startLogin, handleCallbackIfPresent } from './auth'
+
+// PWA Service Worker登録
+registerSW({ immediate: true })
 
 const API_URL = import.meta.env.VITE_API_URL as string
 const STORAGE_FAMILY_ID = 'selected:familyId'

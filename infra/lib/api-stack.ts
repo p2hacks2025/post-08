@@ -124,6 +124,21 @@ export class ApiStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
     })
 
+    const leaveFamilyFn = new NodejsFunction(this, 'LeaveFamilyFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(__dirname, '..', 'lambda', 'leave-family.ts'),
+      handler: 'handler',
+      environment: lambdaEnv,
+    })
+
+    const deleteFamilyFn = new NodejsFunction(this, 'DeleteFamilyFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(__dirname, '..', 'lambda', 'delete-family.ts'),
+      handler: 'handler',
+      environment: lambdaEnv,
+      timeout: cdk.Duration.seconds(30),
+    })
+
     // 4) Permissions
     table.grantReadData(meFn)
     table.grantReadWriteData(createFamilyFn)
@@ -141,6 +156,10 @@ export class ApiStack extends cdk.Stack {
     // メンバー一覧・通知送信
     table.grantReadData(listFamilyMembersFn)
     table.grantReadWriteData(sendPushToUserFn)
+
+    // ファミリー退出・削除
+    table.grantReadWriteData(leaveFamilyFn)
+    table.grantReadWriteData(deleteFamilyFn)
 
     // 5) EventBridge Scheduler for daily reminder (20:00 JST = 11:00 UTC)
     new events.Rule(this, 'ReminderSchedule', {
@@ -231,6 +250,20 @@ export class ApiStack extends cdk.Stack {
       path: '/push/send',
       methods: [apigwv2.HttpMethod.POST],
       integration: new integrations.HttpLambdaIntegration('SendPushToUserIntegration', sendPushToUserFn),
+      authorizer: jwtAuthorizer,
+    })
+
+    httpApi.addRoutes({
+      path: '/families/leave',
+      methods: [apigwv2.HttpMethod.POST],
+      integration: new integrations.HttpLambdaIntegration('LeaveFamilyIntegration', leaveFamilyFn),
+      authorizer: jwtAuthorizer,
+    })
+
+    httpApi.addRoutes({
+      path: '/families/delete',
+      methods: [apigwv2.HttpMethod.POST],
+      integration: new integrations.HttpLambdaIntegration('DeleteFamilyIntegration', deleteFamilyFn),
       authorizer: jwtAuthorizer,
     })
 

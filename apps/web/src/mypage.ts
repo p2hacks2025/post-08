@@ -1,7 +1,11 @@
 // src/mypage.ts - マイページ（ファミリー管理 + 履歴表示 + Push通知対応）
 import './style.css'
+import { registerSW } from 'virtual:pwa-register'
 import { handleCallbackIfPresent, isLoggedIn, startLogin, getIdToken, logout } from './auth'
 import { isPushSupported, getNotificationPermission, subscribePush } from './push'
+
+// PWA Service Worker登録
+registerSW({ immediate: true })
 
 const API_URL = import.meta.env.VITE_API_URL as string
 
@@ -183,6 +187,44 @@ async function sendPushToUser(familyId: string, targetSub: string, message: stri
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ familyId, targetSub, message }),
+    })
+    return await res.json()
+  } catch (e) {
+    return { ok: false, message: String(e) }
+  }
+}
+
+async function leaveFamily(familyId: string): Promise<{ ok: boolean; message?: string }> {
+  const idToken = getIdToken()
+  if (!idToken) return { ok: false, message: 'Not logged in' }
+
+  try {
+    const res = await fetch(`${API_URL}/families/leave`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ familyId }),
+    })
+    return await res.json()
+  } catch (e) {
+    return { ok: false, message: String(e) }
+  }
+}
+
+async function deleteFamily(familyId: string): Promise<{ ok: boolean; message?: string }> {
+  const idToken = getIdToken()
+  if (!idToken) return { ok: false, message: 'Not logged in' }
+
+  try {
+    const res = await fetch(`${API_URL}/families/delete`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ familyId }),
     })
     return await res.json()
   } catch (e) {
@@ -618,12 +660,25 @@ async function loadMembers(me: MeResponse) {
     </div>
   ` : ''
 
+  // 退出・削除ボタン
+  const familyActionsHtml = `
+    <div class="family-actions">
+      ${data.isOwner ? `
+        <button class="btn btn-danger" id="deleteFamilyBtn">🗑️ ファミリーを削除</button>
+      ` : `
+        <button class="btn btn-warning" id="leaveFamilyBtn">🚪 ファミリーを退出</button>
+      `}
+    </div>
+  `
+
   membersEl.innerHTML = `
     ${inviteCodeHtml}
     <div class="members-container">
       ${membersHtml}
     </div>
     <div id="sendNotificationResult" class="result-box"></div>
+    ${familyActionsHtml}
+    <div id="familyActionResult" class="result-box"></div>
   `
 
   // 招待コードコピーボタン
@@ -685,6 +740,75 @@ async function loadMembers(me: MeResponse) {
       }
     })
   })
+
+  // ファミリー退出ボタン
+  const leaveFamilyBtn = document.getElementById('leaveFamilyBtn')
+  if (leaveFamilyBtn) {
+    leaveFamilyBtn.addEventListener('click', async () => {
+      if (!selectedFamilyId) return
+
+      const confirmed = confirm('本当にこのファミリーから退出しますか？')
+      if (!confirmed) return
+
+      leaveFamilyBtn.textContent = '処理中...'
+      ;(leaveFamilyBtn as HTMLButtonElement).disabled = true
+
+      const result = await leaveFamily(selectedFamilyId)
+      const resultEl = document.getElementById('familyActionResult')
+
+      if (result.ok) {
+        if (resultEl) {
+          resultEl.innerHTML = `<span class="success">ファミリーから退出しました</span>`
+        }
+        // 再読み込み
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      } else {
+        if (resultEl) {
+          resultEl.innerHTML = `<span class="error">${escapeHtml(result.message || 'エラーが発生しました')}</span>`
+        }
+        leaveFamilyBtn.textContent = '🚪 ファミリーを退出'
+        ;(leaveFamilyBtn as HTMLButtonElement).disabled = false
+      }
+    })
+  }
+
+  // ファミリー削除ボタン
+  const deleteFamilyBtn = document.getElementById('deleteFamilyBtn')
+  if (deleteFamilyBtn) {
+    deleteFamilyBtn.addEventListener('click', async () => {
+      if (!selectedFamilyId) return
+
+      const confirmed = confirm('本当にこのファミリーを削除しますか？\nすべてのメンバーと履歴が削除されます。この操作は取り消せません。')
+      if (!confirmed) return
+
+      const doubleConfirmed = confirm('最終確認：ファミリーを削除してもよろしいですか？')
+      if (!doubleConfirmed) return
+
+      deleteFamilyBtn.textContent = '削除中...'
+      ;(deleteFamilyBtn as HTMLButtonElement).disabled = true
+
+      const result = await deleteFamily(selectedFamilyId)
+      const resultEl = document.getElementById('familyActionResult')
+
+      if (result.ok) {
+        if (resultEl) {
+          resultEl.innerHTML = `<span class="success">ファミリーを削除しました</span>`
+        }
+        // 再読み込み
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      } else {
+        if (resultEl) {
+          resultEl.innerHTML = `<span class="error">${escapeHtml(result.message || 'エラーが発生しました')}</span>`
+        }
+        deleteFamilyBtn.textContent = '🗑️ ファミリーを削除'
+        ;(deleteFamilyBtn as HTMLButtonElement).disabled = false
+      }
+    })
+  }
 }
 
 function escapeHtml(str: string): string {
