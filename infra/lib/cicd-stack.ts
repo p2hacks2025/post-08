@@ -111,7 +111,7 @@ function handler(event) {
     })
 
     // CloudFront Distributionにfunctionを追加
-    const cfnDistribution = this.webDistribution.node.defaultChild as cloudfront.CfnDistribution
+    const cfnDistribution = this.distribution.node.defaultChild as cloudfront.CfnDistribution
     cfnDistribution.addPropertyOverride('DistributionConfig.DefaultCacheBehavior.FunctionAssociations', [
       {
         EventType: 'viewer-request',
