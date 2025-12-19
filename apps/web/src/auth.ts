@@ -13,9 +13,17 @@ const STORAGE_REDIRECT_URI = 'pkce:redirect_uri'
 function getCurrentRedirectUri(): string {
   // パスの末尾を / で終わらせる（Cognitoの設定と一致させる）
   let path = window.location.pathname
+  
+  // index.html で終わる場合は削除
+  if (path.endsWith('/index.html')) {
+    path = path.slice(0, -10) // '/index.html' を削除
+  }
+  
+  // 末尾を / で終わらせる
   if (!path.endsWith('/')) {
     path += '/'
   }
+  
   return window.location.origin + path
 }
 

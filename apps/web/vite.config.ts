@@ -4,6 +4,10 @@ import { resolve } from 'node:path'
 
 export default defineConfig({
   base: '/',
+  server: {
+    port: 5173,
+    strictPort: false,
+  },
   build: {
     rollupOptions: {
       input: {
