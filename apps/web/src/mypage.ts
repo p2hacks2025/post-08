@@ -407,6 +407,8 @@ app.innerHTML = `
           settingsContent?.classList.remove('active')
           settingsContent?.classList.add('hidden')
           currentTab = 'mypage'
+          // マイページタブのイベントリスナーを設定
+          setupMypageTabEvents()
           // マイページタブのデータを読み込む（初回のみ）
           if (!tabDataLoaded.mypage) {
             loadMypageTab()
@@ -418,6 +420,8 @@ app.innerHTML = `
           mypageContent?.classList.remove('active')
           mypageContent?.classList.add('hidden')
           currentTab = 'settings'
+          // 設定タブのイベントリスナーを設定
+          setupSettingsTabEvents(me)
           // 設定タブのデータを読み込む（初回のみ）
           if (!tabDataLoaded.settings) {
             loadHistory()
@@ -431,20 +435,23 @@ app.innerHTML = `
 
   // 現在表示されているタブに応じてイベントリスナーとデータを読み込む
   // 注意: renderLoggedInが呼ばれるとDOMが再生成されるため、タブの状態はcurrentTab変数に基づく
-  if (currentTab === 'settings') {
-    setupSettingsTabEvents(me)
-    if (!tabDataLoaded.settings) {
-      loadHistory()
-      loadMembers(me)
-      tabDataLoaded.settings = true
+  // DOMが完全に更新されるのを待つためにrequestAnimationFrameを使用
+  requestAnimationFrame(() => {
+    if (currentTab === 'settings') {
+      setupSettingsTabEvents(me)
+      if (!tabDataLoaded.settings) {
+        loadHistory()
+        loadMembers(me)
+        tabDataLoaded.settings = true
+      }
+    } else {
+      setupMypageTabEvents()
+      if (!tabDataLoaded.mypage) {
+        loadMypageTab()
+        tabDataLoaded.mypage = true
+      }
     }
-  } else {
-    setupMypageTabEvents()
-    if (!tabDataLoaded.mypage) {
-      loadMypageTab()
-      tabDataLoaded.mypage = true
-    }
-  }
+  })
 }
 
 // マイページタブのイベント設定
@@ -655,25 +662,37 @@ function setupSettingsTabEvents(me: MeResponse) {
   const joinForm = document.getElementById('joinForm')
   if (!createForm || !joinForm) return
 
-  document.getElementById('showCreate')!.addEventListener('click', () => {
+  const showCreateBtn = document.getElementById('showCreate')
+  if (!showCreateBtn) return
+  showCreateBtn.addEventListener('click', () => {
     createForm.classList.remove('hidden')
     joinForm.classList.add('hidden')
   })
 
-  document.getElementById('showJoin')!.addEventListener('click', () => {
+  const showJoinBtn = document.getElementById('showJoin')
+  if (!showJoinBtn) return
+  showJoinBtn.addEventListener('click', () => {
     joinForm.classList.remove('hidden')
     createForm.classList.add('hidden')
   })
 
-  document.getElementById('cancelCreate')!.addEventListener('click', () => {
-    createForm.classList.add('hidden')
-  })
+  const cancelCreateBtn = document.getElementById('cancelCreate')
+  if (cancelCreateBtn) {
+    cancelCreateBtn.addEventListener('click', () => {
+      createForm.classList.add('hidden')
+    })
+  }
 
-  document.getElementById('cancelJoin')!.addEventListener('click', () => {
-    joinForm.classList.add('hidden')
-  })
+  const cancelJoinBtn = document.getElementById('cancelJoin')
+  if (cancelJoinBtn) {
+    cancelJoinBtn.addEventListener('click', () => {
+      joinForm.classList.add('hidden')
+    })
+  }
 
-  document.getElementById('doCreate')!.addEventListener('click', async () => {
+  const doCreateBtn = document.getElementById('doCreate')
+  if (!doCreateBtn) return
+  doCreateBtn.addEventListener('click', async () => {
     const nameInput = document.getElementById('familyName') as HTMLInputElement
     const resultEl = document.getElementById('createResult')!
     const name = nameInput.value.trim()
@@ -701,7 +720,9 @@ function setupSettingsTabEvents(me: MeResponse) {
     }
   })
 
-  document.getElementById('doJoin')!.addEventListener('click', async () => {
+  const doJoinBtn = document.getElementById('doJoin')
+  if (!doJoinBtn) return
+  doJoinBtn.addEventListener('click', async () => {
     const codeInput = document.getElementById('inviteCode') as HTMLInputElement
     const resultEl = document.getElementById('joinResult')!
     const code = codeInput.value.trim().toUpperCase()
