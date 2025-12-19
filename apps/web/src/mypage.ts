@@ -147,6 +147,26 @@ async function fetchHandwashEvents(familyId: string, createdBy?: string): Promis
   }
 }
 
+// プロファイル更新API
+async function updateProfile(displayName: string): Promise<{ ok: boolean; message?: string; displayName?: string }> {
+  const idToken = getIdToken()
+  if (!idToken) return { ok: false, message: 'Not logged in' }
+
+  try {
+    const res = await fetch(`${API_URL}/profile`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ displayName }),
+    })
+    return await res.json()
+  } catch (e) {
+    return { ok: false, message: String(e) }
+  }
+}
+
 async function recordHandwashEvent(familyId: string, mode?: string): Promise<{ ok: boolean; message?: string }> {
   const idToken = getIdToken()
   if (!idToken) return { ok: false, message: 'Not logged in' }
@@ -344,17 +364,6 @@ function renderLoggedIn(me: MeResponse) {
     setSelectedFamilyId(selectedFamilyId)
   }
 
-  const familiesHtml = me.families.length > 0
-    ? me.families.map(f => `
-        <div class="family-item ${f.familyId === selectedFamilyId ? 'selected' : ''}" data-family-id="${f.familyId}">
-          <div class="family-name">${escapeHtml(f.name)}</div>
-          <div class="family-meta">
-            <span class="badge-small ${f.role === 'owner' ? 'owner' : ''}">${f.role === 'owner' ? 'オーナー' : 'メンバー'}</span>
-          </div>
-        </div>
-      `).join('')
-    : '<p class="p muted">まだファミリーに参加していません</p>'
-
   app.innerHTML = `
     <div class="card">
       <h1 class="h1">マイページ</h1>
@@ -417,7 +426,7 @@ function renderLoggedIn(me: MeResponse) {
           currentTab = 'mypage'
           // マイページタブのデータを読み込む（初回のみ）
           if (mypageContent?.querySelector('#mypageStats')?.textContent?.includes('読み込み中')) {
-            loadMypageTab(me)
+            loadMypageTab()
           }
         } else {
           settingsContent?.classList.remove('hidden')
@@ -442,13 +451,13 @@ function renderLoggedIn(me: MeResponse) {
     loadHistory()
     loadMembers(me)
   } else {
-    setupMypageTabEvents(me)
-    loadMypageTab(me)
+    setupMypageTabEvents()
+    loadMypageTab()
   }
 }
 
 // マイページタブのイベント設定
-function setupMypageTabEvents(me: MeResponse) {
+function setupMypageTabEvents() {
   document.getElementById('refresh')!.addEventListener('click', () => loadAndRender())
   document.getElementById('logout')!.addEventListener('click', () => logout())
   
@@ -484,7 +493,7 @@ function setupMypageTabEvents(me: MeResponse) {
 }
 
 // マイページタブのレンダリング
-function renderMypageTab(me: MeResponse): string {
+function renderMypageTab(): string {
   return selectedFamilyId ? `
     <div id="mypageStats" class="mypage-stats">
       <p class="p muted">読み込み中...</p>
@@ -573,7 +582,7 @@ function renderSettingsTab(me: MeResponse): string {
 }
 
 // マイページタブのロード
-async function loadMypageTab(me: MeResponse) {
+async function loadMypageTab() {
   if (!selectedFamilyId) return
 
   const statsEl = document.getElementById('mypageStats')
@@ -738,11 +747,38 @@ function setupSettingsTabEvents(me: MeResponse) {
     })
   }
 
+  // 名前更新ボタン
+  const updateDisplayNameBtn = document.getElementById('updateDisplayName')
+  const userDisplayNameInput = document.getElementById('userDisplayName') as HTMLInputElement
+  if (updateDisplayNameBtn && userDisplayNameInput) {
+    updateDisplayNameBtn.addEventListener('click', async () => {
+      const displayName = userDisplayNameInput.value.trim()
+      if (!displayName) {
+        alert('名前を入力してください')
+        return
+      }
+
+      updateDisplayNameBtn.textContent = '更新中...'
+      ;(updateDisplayNameBtn as HTMLButtonElement).disabled = true
+
+      const result = await updateProfile(displayName)
+      if (result.ok) {
+        updateDisplayNameBtn.textContent = '✓ 更新しました'
+        setTimeout(() => {
+          updateDisplayNameBtn.textContent = '更新'
+          ;(updateDisplayNameBtn as HTMLButtonElement).disabled = false
+          loadAndRender()
+        }, 1500)
+      } else {
+        alert(result.message || '更新に失敗しました')
+        updateDisplayNameBtn.textContent = '更新'
+        ;(updateDisplayNameBtn as HTMLButtonElement).disabled = false
+      }
+    })
+  }
+
   document.getElementById('refresh')!.addEventListener('click', () => loadAndRender())
   document.getElementById('logout')!.addEventListener('click', () => logout())
-  document.getElementById('back')!.addEventListener('click', () => {
-    location.href = '../'
-  })
 
   // 履歴・メンバー読み込み
   if (selectedFamilyId) {
