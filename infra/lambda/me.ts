@@ -7,6 +7,20 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const claims = event?.requestContext?.authorizer?.jwt?.claims || {}
   const sub = String(claims.sub ?? "")
 
+  // ユーザープロファイルを取得
+  let displayName: string | undefined
+  if (sub) {
+    const profileQuery = await doc.send(new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: "pk = :pk AND sk = :sk",
+      ExpressionAttributeValues: {
+        ":pk": `USER#${sub}`,
+        ":sk": "PROFILE",
+      },
+    }))
+    displayName = profileQuery.Items?.[0]?.displayName as string | undefined
+  }
+
   let families: any[] = []
   if (sub) {
     const q = await doc.send(new QueryCommand({
@@ -42,6 +56,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     sub: claims.sub,
     email: claims.email,
     username: claims["cognito:username"],
+    displayName,
     iss: claims.iss,
     aud: claims.aud,
     families,

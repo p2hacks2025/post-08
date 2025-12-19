@@ -63,9 +63,37 @@ let mode: Mode | null = null
 let elapsedSeconds = 0
 let intervalId: number | null = null
 let wakeLock: any = null
+let isSelecting = false // 選択中のフラグ（連続クリック防止）
+let bubbleFieldHTML: string | null = null // 泡フィールドのHTMLを保持
+
+// 泡フィールドのDOM要素を保持
+let bubbleFieldElement: HTMLElement | null = null
 
 function setHTML(html: string) {
+  // 既存の泡フィールドを取得（appの外からも探す）
+  if (!bubbleFieldElement) {
+    bubbleFieldElement = app.querySelector('.small-bubble-field') as HTMLElement | null
+    if (!bubbleFieldElement) {
+      bubbleFieldElement = document.querySelector('.small-bubble-field') as HTMLElement | null
+    }
+  }
+  
+  // 泡フィールドが存在しない場合は生成
+  if (!bubbleFieldElement) {
+    const tempDiv = document.createElement('div')
+    tempDiv.innerHTML = generateBubbleField()
+    bubbleFieldElement = tempDiv.firstElementChild as HTMLElement
+  }
+  
+  // HTMLを設定
   app.innerHTML = html
+  
+  // 新しいHTMLに泡フィールドが含まれていない場合は追加
+  const washScene = app.querySelector('.wash-scene-new')
+  if (washScene && bubbleFieldElement && !washScene.querySelector('.small-bubble-field')) {
+    // 既存のDOM要素を直接追加（アニメーションが継続する）
+    washScene.insertBefore(bubbleFieldElement, washScene.firstChild)
+  }
 }
 
 function modeLabel(m: Mode) {
@@ -189,33 +217,43 @@ function createBubbleParticles(x: number, y: number, count = 8) {
 
 // --- 背景の小さな泡を生成（%指定で画面全体に配置）---
 function generateBubbleField(): string {
-  const bubbles: string[] = []
-  const configs = [
-    { left: '5%', size: 20, delay: 0.0, dur: 5.5 },
-    { left: '15%', size: 14, delay: 1.2, dur: 4.2 },
-    { left: '25%', size: 28, delay: 0.5, dur: 6.5 },
-    { left: '35%', size: 16, delay: 2.0, dur: 5.0 },
-    { left: '45%', size: 22, delay: 0.8, dur: 5.8 },
-    { left: '55%', size: 12, delay: 1.5, dur: 4.0 },
-    { left: '65%', size: 18, delay: 0.3, dur: 5.2 },
-    { left: '75%', size: 24, delay: 2.5, dur: 4.8 },
-    { left: '85%', size: 10, delay: 3.0, dur: 3.8 },
-    { left: '95%', size: 20, delay: 1.8, dur: 6.2 },
-  ]
+  // 既に生成済みの場合は再利用
+  if (bubbleFieldHTML) {
+    return bubbleFieldHTML
+  }
 
-  configs.forEach((c) => {
+  const bubbles: string[] = []
+  // サイズを3倍にして、サイズをまちまちにする（ランダム要素を追加）
+  // 下の方にランダムに配置し、ランダムなdelayで生成
+  const numBubbles = 12 // 泡の数を増やす
+  for (let i = 0; i < numBubbles; i++) {
+    // 左位置をランダムに（5% ~ 95%）
+    const left = 5 + Math.random() * 90
+    // サイズをランダムに（30px ~ 90px）
+    const baseSize = 30 + Math.random() * 60
+    // サイズにランダム要素を追加（±20%）
+    const sizeVariation = 1 + (Math.random() - 0.5) * 0.4 // 0.8 ~ 1.2
+    const size = Math.round(baseSize * sizeVariation)
+    // アニメーション時間をランダムに（8s ~ 14s）
+    const baseDur = 8 + Math.random() * 6
+    const durVariation = 1 + (Math.random() - 0.5) * 0.2 // 0.9 ~ 1.1
+    const dur = (baseDur * durVariation).toFixed(1)
+    // ランダムなdelay（0s ~ 10s）で生成タイミングをずらす
+    const delay = Math.random() * 10
+
     bubbles.push(`
       <div class="small-bubble" style="
-        left: ${c.left};
-        width: ${c.size}px;
-        height: ${c.size}px;
-        animation-duration: ${c.dur}s;
-        animation-delay: ${c.delay}s;
+        left: ${left.toFixed(1)}%;
+        width: ${size}px;
+        height: ${size}px;
+        animation-duration: ${dur}s;
+        animation-delay: ${delay.toFixed(1)}s;
       "></div>
     `)
-  })
+  }
 
-  return `<div class="small-bubble-field">${bubbles.join('')}</div>`
+  bubbleFieldHTML = `<div class="small-bubble-field">${bubbles.join('')}</div>`
+  return bubbleFieldHTML
 }
 
 // --- タイマー表示更新 ---
@@ -243,30 +281,38 @@ function transitionToPhase(newPhase: Phase) {
       const bigBubble = document.querySelector('.main-big-bubble')
       bigBubble?.classList.add('visible')
     }, 50)
-    // せり上がり完了後、アニメーションをフェードイン
+    // せり上がり完了後（2.7秒後）、アニメーションをフェードインしてタイマー開始
     setTimeout(() => {
       const content = document.querySelector('.handwash-content')
       content?.classList.add('visible')
       transitionToPhase('playing')
-    }, 1000)
+    }, 2700) // 大きな泡の上昇完了を待つ
   } else if (newPhase === 'playing') {
     startTimer()
   } else if (newPhase === 'select') {
     stopTimer()
-    // コンテンツをフェードアウト
+    // コンテンツ（文字・ボタン・画像）をフェードアウト
     const content = document.querySelector('.handwash-content')
     const bigBubble = document.querySelector('.main-big-bubble')
-    content?.classList.remove('visible')
-    content?.classList.add('fade-out')
     
+    if (content) {
+      content.classList.remove('visible')
+      content.classList.add('fade-out')
+    }
+    
+    // コンテンツのフェードアウト完了後、大きな泡もフェードアウト
     setTimeout(() => {
-      bigBubble?.classList.remove('visible')
-      bigBubble?.classList.add('exit')
-    }, 300)
+      if (bigBubble) {
+        // 場面選択と同じようにフェードアウト
+        bigBubble.classList.remove('visible')
+        bigBubble.classList.add('fade-out')
+      }
+    }, 300) // フェードアウト時間に合わせる
     
+    // 大きな泡がフェードアウトした後、選択シーンに遷移
     setTimeout(() => {
       renderSelectScene()
-    }, 1000)
+    }, 600) // フェードアウト時間（0.3s）+ 余裕
   } else if (newPhase === 'done') {
     renderDone()
   }
@@ -276,7 +322,6 @@ function transitionToPhase(newPhase: Phase) {
 function renderWashScene() {
   setHTML(`
     <div class="wash-scene-new">
-      <div class="wash-bg-gradient"></div>
       ${generateBubbleField()}
       
       <div class="main-big-bubble">
@@ -293,7 +338,6 @@ function renderWashScene() {
           <img src="/steps/01.png" alt="手洗い" class="handwash-anim" />
         </div>
 
-        <p class="status-text">手を洗っています...</p>
 
         <div class="finish-btn-area">
           <button class="finish-bubble-btn disabled" id="finish-btn" disabled>
@@ -315,10 +359,12 @@ function renderWashScene() {
 }
 
 function renderSelectScene() {
+  // 泡フィールドは既に生成済みのHTMLを使用
+  const bubbleField = generateBubbleField()
+  
   setHTML(`
     <div class="wash-scene-new">
-      <div class="wash-bg-gradient"></div>
-      ${generateBubbleField()}
+      ${bubbleField}
 
       <div class="select-content visible">
         <h1 class="select-title">いまの場面は？</h1>
@@ -341,19 +387,47 @@ function renderSelectScene() {
   `)
 
   document.getElementById('home')!.addEventListener('click', async (e) => {
+    if (isSelecting) return // 連続クリック防止
+    isSelecting = true
+    
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     createBubbleParticles(rect.left + rect.width / 2, rect.top + rect.height / 2)
+    
+    // フェードアウト
+    const selectContent = document.querySelector('.select-content')
+    if (selectContent) {
+      selectContent.classList.remove('visible')
+      selectContent.classList.add('fade-out')
+    }
+    
     mode = 'home'
     await recordHandwash()
-    setTimeout(() => transitionToPhase('done'), 150)
+    setTimeout(() => {
+      transitionToPhase('done')
+      isSelecting = false
+    }, 400) // フェードアウト時間に合わせて調整
   })
 
   document.getElementById('meal')!.addEventListener('click', async (e) => {
+    if (isSelecting) return // 連続クリック防止
+    isSelecting = true
+    
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     createBubbleParticles(rect.left + rect.width / 2, rect.top + rect.height / 2)
+    
+    // フェードアウト
+    const selectContent = document.querySelector('.select-content')
+    if (selectContent) {
+      selectContent.classList.remove('visible')
+      selectContent.classList.add('fade-out')
+    }
+    
     mode = 'meal'
     await recordHandwash()
-    setTimeout(() => transitionToPhase('done'), 150)
+    setTimeout(() => {
+      transitionToPhase('done')
+      isSelecting = false
+    }, 400) // フェードアウト時間に合わせて調整
   })
 }
 
@@ -363,10 +437,12 @@ function renderDone() {
   const hasFamilyId = !!getSelectedFamilyId()
   const recorded = loggedIn && hasFamilyId
 
+  // 泡フィールドは既に生成済みのHTMLを使用
+  const bubbleField = generateBubbleField()
+  
   setHTML(`
     <div class="wash-scene-new">
-      <div class="wash-bg-gradient"></div>
-      ${generateBubbleField()}
+      ${bubbleField}
 
       <div class="done-content visible">
         ${modeBadge}

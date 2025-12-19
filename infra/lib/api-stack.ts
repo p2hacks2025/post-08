@@ -139,6 +139,13 @@ export class ApiStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
     })
 
+    const updateProfileFn = new NodejsFunction(this, 'UpdateProfileFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(__dirname, '..', 'lambda', 'update-profile.ts'),
+      handler: 'handler',
+      environment: lambdaEnv,
+    })
+
     // 4) Permissions
     table.grantReadData(meFn)
     table.grantReadWriteData(createFamilyFn)
@@ -160,6 +167,9 @@ export class ApiStack extends cdk.Stack {
     // ファミリー退出・削除
     table.grantReadWriteData(leaveFamilyFn)
     table.grantReadWriteData(deleteFamilyFn)
+
+    // プロファイル更新
+    table.grantReadWriteData(updateProfileFn)
 
     // 5) EventBridge Scheduler for daily reminder (20:00 JST = 11:00 UTC)
     new events.Rule(this, 'ReminderSchedule', {
@@ -264,6 +274,13 @@ export class ApiStack extends cdk.Stack {
       path: '/families/delete',
       methods: [apigwv2.HttpMethod.POST],
       integration: new integrations.HttpLambdaIntegration('DeleteFamilyIntegration', deleteFamilyFn),
+      authorizer: jwtAuthorizer,
+    })
+
+    httpApi.addRoutes({
+      path: '/profile',
+      methods: [apigwv2.HttpMethod.PUT],
+      integration: new integrations.HttpLambdaIntegration('UpdateProfileIntegration', updateProfileFn),
       authorizer: jwtAuthorizer,
     })
 

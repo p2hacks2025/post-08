@@ -45,7 +45,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       })
     )
 
-    const events = (res.Items ?? []).map((it) => ({
+    let events = (res.Items ?? []).map((it) => ({
       familyId: it.familyId,
       eventId: it.eventId,
       atMs: it.atMs,
@@ -54,6 +54,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       durationSec: it.durationSec,
       note: it.note,
     }))
+
+    // 特定のユーザーの履歴のみをフィルタリング（createdByパラメータがある場合）
+    const createdBy = qs.createdBy
+    if (createdBy) {
+      events = events.filter(ev => ev.createdBy === createdBy)
+    }
 
     return json(200, { ok: true, events })
   } catch (e: any) {

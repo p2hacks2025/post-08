@@ -23,6 +23,7 @@ type MeResponse = {
   sub: string
   email: string
   username: string
+  displayName?: string
   families: Family[]
 }
 
@@ -71,6 +72,7 @@ function setSelectedFamilyId(id: string | null) {
 }
 
 let selectedFamilyId: string | null = getSelectedFamilyId()
+let currentTab: 'mypage' | 'settings' = 'mypage' // 現在のタブ
 
 // --- API calls ---
 async function fetchMe(): Promise<MeResponse | null> {
@@ -126,12 +128,16 @@ async function joinFamily(inviteCode: string): Promise<{ ok: boolean; message?: 
   }
 }
 
-async function fetchHandwashEvents(familyId: string): Promise<EventsResponse | null> {
+async function fetchHandwashEvents(familyId: string, createdBy?: string): Promise<EventsResponse | null> {
   const idToken = getIdToken()
   if (!idToken) return null
 
   try {
-    const res = await fetch(`${API_URL}/handwash/events?familyId=${familyId}&limit=30`, {
+    let url = `${API_URL}/handwash/events?familyId=${familyId}&limit=30`
+    if (createdBy) {
+      url += `&createdBy=${encodeURIComponent(createdBy)}`
+    }
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${idToken}` },
     })
     if (!res.ok) return null
@@ -252,6 +258,45 @@ function formatTime(ms: number): string {
   })
 }
 
+// 継続日数を計算
+function calculateConsecutiveDays(events: HandwashEvent[]): number {
+  if (events.length === 0) return 0
+
+  // 日付ごとにグループ化（JSTで）
+  const dates = new Set<string>()
+  events.forEach(ev => {
+    const date = new Date(ev.atMs)
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    dates.add(dateStr)
+  })
+
+  // 日付をソート
+  const sortedDates = Array.from(dates).sort().reverse()
+
+  if (sortedDates.length === 0) return 0
+
+  // 今日から連続日数を計算
+  let consecutiveDays = 0
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  for (let i = 0; i < sortedDates.length; i++) {
+    const dateStr = sortedDates[i]
+    const checkDate = new Date(dateStr)
+    checkDate.setHours(0, 0, 0, 0)
+
+    const diffDays = Math.floor((today.getTime() - checkDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (diffDays === consecutiveDays) {
+      consecutiveDays++
+    } else {
+      break
+    }
+  }
+
+  return consecutiveDays
+}
+
 function getModeLabel(mode?: string): string {
   if (mode === 'home') return '帰宅時'
   if (mode === 'meal') return '食事前'
@@ -316,8 +361,153 @@ function renderLoggedIn(me: MeResponse) {
       
       <div class="user-info">
         <div class="user-email">${escapeHtml(me.email)}</div>
+        <div class="user-name-section">
+          <input type="text" id="userDisplayName" class="input input-small" placeholder="あなたの名前" value="${escapeHtml(me.displayName || '')}" maxlength="30" />
+          <button class="btn btn-small" id="updateDisplayName">更新</button>
+        </div>
       </div>
 
+      <!-- タブ -->
+      <div class="tabs">
+        <button class="tab-btn ${currentTab === 'mypage' ? 'active' : ''}" data-tab="mypage">
+          🎉 マイページ
+        </button>
+        <button class="tab-btn ${currentTab === 'settings' ? 'active' : ''}" data-tab="settings">
+          ⚙️ 設定
+        </button>
+      </div>
+
+      <!-- タブコンテンツ（両方読み込んで表示/非表示で切り替え） -->
+      <div class="tab-content">
+        <div id="mypageTabContent" class="tab-pane ${currentTab === 'mypage' ? 'active' : 'hidden'}">
+          ${renderMypageTab(me)}
+        </div>
+        <div id="settingsTabContent" class="tab-pane ${currentTab === 'settings' ? 'active' : 'hidden'}">
+          ${renderSettingsTab(me)}
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="row">
+        <button class="btn secondary" id="refresh">更新</button>
+        <button class="btn secondary" id="logout">ログアウト</button>
+      </div>
+    </div>
+  `
+
+  // タブ切り替えイベント（表示/非表示のみ切り替え）
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.getAttribute('data-tab') as 'mypage' | 'settings'
+      if (tab && tab !== currentTab) {
+        // タブボタンのactive状態を更新
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        
+        // タブコンテンツの表示/非表示を切り替え
+        const mypageContent = document.getElementById('mypageTabContent')
+        const settingsContent = document.getElementById('settingsTabContent')
+        
+        if (tab === 'mypage') {
+          mypageContent?.classList.remove('hidden')
+          mypageContent?.classList.add('active')
+          settingsContent?.classList.remove('active')
+          settingsContent?.classList.add('hidden')
+          currentTab = 'mypage'
+          // マイページタブのデータを読み込む（初回のみ）
+          if (mypageContent?.querySelector('#mypageStats')?.textContent?.includes('読み込み中')) {
+            loadMypageTab(me)
+          }
+        } else {
+          settingsContent?.classList.remove('hidden')
+          settingsContent?.classList.add('active')
+          mypageContent?.classList.remove('active')
+          mypageContent?.classList.add('hidden')
+          currentTab = 'settings'
+          // 設定タブのデータを読み込む（初回のみ）
+          const historyEl = document.getElementById('historyList')
+          if (historyEl?.textContent?.includes('読み込み中')) {
+            loadHistory()
+            loadMembers(me)
+          }
+        }
+      }
+    })
+  })
+
+  // 初期タブのイベントリスナーを設定
+  if (currentTab === 'settings') {
+    setupSettingsTabEvents(me)
+    loadHistory()
+    loadMembers(me)
+  } else {
+    setupMypageTabEvents(me)
+    loadMypageTab(me)
+  }
+}
+
+// マイページタブのイベント設定
+function setupMypageTabEvents(me: MeResponse) {
+  document.getElementById('refresh')!.addEventListener('click', () => loadAndRender())
+  document.getElementById('logout')!.addEventListener('click', () => logout())
+  
+  // 名前更新ボタン（マイページタブにも表示される場合）
+  const updateDisplayNameBtn = document.getElementById('updateDisplayName')
+  const userDisplayNameInput = document.getElementById('userDisplayName') as HTMLInputElement
+  if (updateDisplayNameBtn && userDisplayNameInput) {
+    updateDisplayNameBtn.addEventListener('click', async () => {
+      const displayName = userDisplayNameInput.value.trim()
+      if (!displayName) {
+        alert('名前を入力してください')
+        return
+      }
+
+      updateDisplayNameBtn.textContent = '更新中...'
+      ;(updateDisplayNameBtn as HTMLButtonElement).disabled = true
+
+      const result = await updateProfile(displayName)
+      if (result.ok) {
+        updateDisplayNameBtn.textContent = '✓ 更新しました'
+        setTimeout(() => {
+          updateDisplayNameBtn.textContent = '更新'
+          ;(updateDisplayNameBtn as HTMLButtonElement).disabled = false
+          loadAndRender()
+        }, 1500)
+      } else {
+        alert(result.message || '更新に失敗しました')
+        updateDisplayNameBtn.textContent = '更新'
+        ;(updateDisplayNameBtn as HTMLButtonElement).disabled = false
+      }
+    })
+  }
+}
+
+// マイページタブのレンダリング
+function renderMypageTab(me: MeResponse): string {
+  return selectedFamilyId ? `
+    <div id="mypageStats" class="mypage-stats">
+      <p class="p muted">読み込み中...</p>
+    </div>
+  ` : `
+    <p class="p muted">ファミリーを選択してください</p>
+  `
+}
+
+// 設定タブのレンダリング
+function renderSettingsTab(me: MeResponse): string {
+  const familiesHtml = me.families.length > 0
+    ? me.families.map(f => `
+        <div class="family-item ${f.familyId === selectedFamilyId ? 'selected' : ''}" data-family-id="${f.familyId}">
+          <div class="family-name">${escapeHtml(f.name)}</div>
+          <div class="family-meta">
+            <span class="badge-small ${f.role === 'owner' ? 'owner' : ''}">${f.role === 'owner' ? 'オーナー' : 'メンバー'}</span>
+          </div>
+        </div>
+      `).join('')
+    : '<p class="p muted">まだファミリーに参加していません</p>'
+
+  return `
       <hr class="divider" />
 
       <h2 class="h2">ファミリー</h2>
@@ -367,12 +557,8 @@ function renderLoggedIn(me: MeResponse) {
       <!-- 履歴セクション -->
       <h2 class="h2">手洗い履歴</h2>
       ${selectedFamilyId ? `
-        <div class="history-actions">
-          <button class="btn record-btn" id="recordHome">🏠 帰宅時を記録</button>
-          <button class="btn record-btn" id="recordMeal">🍽️ 食事前を記録</button>
-        </div>
         <div id="historyList" class="history-list">
-          <p class="p muted">読み込み中...</p>
+          <p class="p muted">メンバーをクリックして履歴を確認</p>
         </div>
       ` : `
         <p class="p muted">ファミリーを選択または作成してください</p>
@@ -383,19 +569,59 @@ function renderLoggedIn(me: MeResponse) {
       <!-- 通知設定セクション -->
       <h2 class="h2">🔔 リマインド通知</h2>
       ${renderNotificationSection()}
+  `
+}
 
-      <hr class="divider" />
+// マイページタブのロード
+async function loadMypageTab(me: MeResponse) {
+  if (!selectedFamilyId) return
 
-      <div class="row">
-        <button class="btn secondary" id="refresh">更新</button>
-        <button class="btn secondary" id="logout">ログアウト</button>
-        <button class="btn secondary" id="back">戻る</button>
+  const statsEl = document.getElementById('mypageStats')
+  if (!statsEl) return
+
+  statsEl.innerHTML = '<p class="p muted">読み込み中...</p>'
+
+  const data = await fetchHandwashEvents(selectedFamilyId)
+  if (!data || !data.ok) {
+    statsEl.innerHTML = '<p class="p muted">データを取得できませんでした</p>'
+    return
+  }
+
+  const consecutiveDays = calculateConsecutiveDays(data.events)
+  const totalEvents = data.events.length
+  const todayEvents = data.events.filter(ev => {
+    const evDate = new Date(ev.atMs)
+    const today = new Date()
+    return evDate.getDate() === today.getDate() &&
+           evDate.getMonth() === today.getMonth() &&
+           evDate.getFullYear() === today.getFullYear()
+  }).length
+
+  statsEl.innerHTML = `
+    <div class="stats-card">
+      <div class="stat-item">
+        <div class="stat-value">${consecutiveDays}</div>
+        <div class="stat-label">日連続！</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">${totalEvents}</div>
+        <div class="stat-label">回手を洗った</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">${todayEvents}</div>
+        <div class="stat-label">今日の回数</div>
       </div>
     </div>
+    <div class="encouragement">
+      ${consecutiveDays > 0 ? `🎉 ${consecutiveDays}日連続で手を洗えているね！えらい！` : '今日から手洗いを始めよう！'}
+    </div>
   `
+}
 
-  // ファミリー選択イベント
-  document.querySelectorAll('.family-item[data-family-id]').forEach(el => {
+// 設定タブのイベント設定
+function setupSettingsTabEvents(me: MeResponse) {
+  // ファミリー選択イベント（設定タブ内）
+  document.querySelectorAll('#settingsTabContent .family-item[data-family-id]').forEach(el => {
     el.addEventListener('click', () => {
       const familyId = el.getAttribute('data-family-id')
       if (familyId) {
@@ -403,13 +629,15 @@ function renderLoggedIn(me: MeResponse) {
         setSelectedFamilyId(familyId)
         renderLoggedIn(me)
         loadHistory()
+        loadMembers(me)
       }
     })
   })
 
   // 作成・参加フォーム
-  const createForm = document.getElementById('createForm')!
-  const joinForm = document.getElementById('joinForm')!
+  const createForm = document.getElementById('createForm')
+  const joinForm = document.getElementById('joinForm')
+  if (!createForm || !joinForm) return
 
   document.getElementById('showCreate')!.addEventListener('click', () => {
     createForm.classList.remove('hidden')
@@ -478,49 +706,6 @@ function renderLoggedIn(me: MeResponse) {
     }
   })
 
-  // 手洗い記録ボタン
-  const recordHomeBtn = document.getElementById('recordHome')
-  const recordMealBtn = document.getElementById('recordMeal')
-
-  if (recordHomeBtn) {
-    recordHomeBtn.addEventListener('click', async () => {
-      if (!selectedFamilyId) return
-      recordHomeBtn.textContent = '記録中...'
-      const result = await recordHandwashEvent(selectedFamilyId, 'home')
-      if (result.ok) {
-        recordHomeBtn.textContent = '✓ 記録しました！'
-        setTimeout(() => {
-          recordHomeBtn.textContent = '🏠 帰宅時を記録'
-          loadHistory()
-        }, 1500)
-      } else {
-        recordHomeBtn.textContent = 'エラー'
-        setTimeout(() => {
-          recordHomeBtn.textContent = '🏠 帰宅時を記録'
-        }, 1500)
-      }
-    })
-  }
-
-  if (recordMealBtn) {
-    recordMealBtn.addEventListener('click', async () => {
-      if (!selectedFamilyId) return
-      recordMealBtn.textContent = '記録中...'
-      const result = await recordHandwashEvent(selectedFamilyId, 'meal')
-      if (result.ok) {
-        recordMealBtn.textContent = '✓ 記録しました！'
-        setTimeout(() => {
-          recordMealBtn.textContent = '🍽️ 食事前を記録'
-          loadHistory()
-        }, 1500)
-      } else {
-        recordMealBtn.textContent = 'エラー'
-        setTimeout(() => {
-          recordMealBtn.textContent = '🍽️ 食事前を記録'
-        }, 1500)
-      }
-    })
-  }
 
   // 通知有効化ボタン
   const enableNotificationBtn = document.getElementById('enableNotification')
@@ -572,9 +757,16 @@ async function loadHistory() {
   const historyEl = document.getElementById('historyList')
   if (!historyEl) return
 
+  historyEl.innerHTML = '<p class="p muted">メンバーをクリックして履歴を確認</p>'
+}
+
+async function loadHistoryForMember(familyId: string, memberSub: string, memberName: string) {
+  const historyEl = document.getElementById('historyList')
+  if (!historyEl) return
+
   historyEl.innerHTML = '<p class="p muted">読み込み中...</p>'
 
-  const data = await fetchHandwashEvents(selectedFamilyId)
+  const data = await fetchHandwashEvents(familyId, memberSub)
 
   if (!data || !data.ok) {
     historyEl.innerHTML = '<p class="p muted">履歴を取得できませんでした</p>'
@@ -582,22 +774,60 @@ async function loadHistory() {
   }
 
   if (data.events.length === 0) {
-    historyEl.innerHTML = '<p class="p muted">まだ履歴がありません</p>'
+    historyEl.innerHTML = `<p class="p muted">${escapeHtml(memberName || 'このメンバー')}の履歴はまだありません</p>`
     return
   }
 
-  const eventsHtml = data.events.map(ev => `
-    <div class="history-item">
-      <div class="history-icon">${ev.mode === 'home' ? '🏠' : ev.mode === 'meal' ? '🍽️' : '🧼'}</div>
-      <div class="history-content">
-        <div class="history-label">${getModeLabel(ev.mode)}</div>
-        <div class="history-time">${formatTime(ev.atMs)}</div>
-      </div>
-      ${ev.durationSec ? `<div class="history-duration">${ev.durationSec}秒</div>` : ''}
+  const eventsHtml = `
+    <div class="history-header">
+      <h3 class="h3">${escapeHtml(memberName || 'メンバー')}の履歴</h3>
+      ${memberSub ? `<button class="btn btn-small" id="clearHistoryFilter">すべて表示</button>` : ''}
     </div>
-  `).join('')
+    ${data.events.map(ev => `
+      <div class="history-item">
+        <div class="history-icon">${ev.mode === 'home' ? '🏠' : ev.mode === 'meal' ? '🍽️' : '🧼'}</div>
+        <div class="history-content">
+          <div class="history-label">${getModeLabel(ev.mode)}</div>
+          <div class="history-time">${formatTime(ev.atMs)}</div>
+        </div>
+        ${ev.durationSec ? `<div class="history-duration">${ev.durationSec}秒</div>` : ''}
+      </div>
+    `).join('')}
+  `
 
   historyEl.innerHTML = eventsHtml
+
+  // すべて表示ボタン
+  const clearFilterBtn = document.getElementById('clearHistoryFilter')
+  if (clearFilterBtn) {
+    clearFilterBtn.addEventListener('click', async () => {
+      // すべてのメンバーの履歴を表示（フィルタなし）
+      const allData = await fetchHandwashEvents(familyId)
+      if (allData && allData.ok) {
+        if (allData.events.length === 0) {
+          historyEl.innerHTML = '<p class="p muted">まだ履歴がありません</p>'
+        } else {
+          historyEl.innerHTML = `
+            <div class="history-header">
+              <h3 class="h3">すべての履歴</h3>
+            </div>
+            ${allData.events.map(ev => `
+              <div class="history-item">
+                <div class="history-icon">${ev.mode === 'home' ? '🏠' : ev.mode === 'meal' ? '🍽️' : '🧼'}</div>
+                <div class="history-content">
+                  <div class="history-label">${getModeLabel(ev.mode)}</div>
+                  <div class="history-time">${formatTime(ev.atMs)}</div>
+                </div>
+                ${ev.durationSec ? `<div class="history-duration">${ev.durationSec}秒</div>` : ''}
+              </div>
+            `).join('')}
+          `
+        }
+      }
+      // メンバーの選択を解除
+      document.querySelectorAll('.member-item').forEach(el => el.classList.remove('selected'))
+    })
+  }
 }
 
 async function loadMembers(me: MeResponse) {
@@ -620,16 +850,25 @@ async function loadMembers(me: MeResponse) {
     return
   }
 
-  const membersHtml = data.members.map(member => {
+  // メンバーをソート（オーナーが上、その後はjoinedAt順）
+  const sortedMembers = [...data.members].sort((a, b) => {
+    // オーナーを優先
+    if (a.role === 'owner' && b.role !== 'owner') return -1
+    if (a.role !== 'owner' && b.role === 'owner') return 1
+    // 同じロールの場合はjoinedAt順
+    return (a.joinedAt || '').localeCompare(b.joinedAt || '')
+  })
+
+  const membersHtml = sortedMembers.map(member => {
     const isMe = member.sub === me.sub
-    const displayName = member.displayName || member.sub.slice(0, 8) + '...'
+    const displayName = member.displayName || (isMe ? 'あなた' : member.sub.slice(0, 8) + '...')
     const roleLabel = member.role === 'owner' ? 'オーナー' : 'メンバー'
     
     // オーナーは自分以外のメンバーに通知を送れる
     const canSendNotification = data.isOwner && !isMe
     
     return `
-      <div class="member-item ${isMe ? 'is-me' : ''}">
+      <div class="member-item clickable ${isMe ? 'is-me' : ''}" data-member-sub="${member.sub}" data-member-name="${escapeHtml(displayName)}">
         <div class="member-info">
           <div class="member-name">
             ${isMe ? '👤 ' : ''}${escapeHtml(displayName)}
@@ -640,7 +879,7 @@ async function loadMembers(me: MeResponse) {
           </div>
         </div>
         ${canSendNotification ? `
-          <button class="btn btn-small notify-btn" data-target-sub="${member.sub}" data-name="${escapeHtml(displayName)}">
+          <button class="btn btn-small notify-btn" data-target-sub="${member.sub}" data-name="${escapeHtml(displayName)}" onclick="event.stopPropagation()">
             📢 通知
           </button>
         ` : ''}
@@ -700,9 +939,27 @@ async function loadMembers(me: MeResponse) {
     })
   }
 
+  // メンバーをクリックしたときに履歴を表示
+  membersEl.querySelectorAll('.member-item[data-member-sub]').forEach(item => {
+    item.addEventListener('click', async () => {
+      const memberSub = item.getAttribute('data-member-sub')
+      const memberName = item.getAttribute('data-member-name')
+      
+      if (!memberSub || !selectedFamilyId) return
+
+      // 選択中のメンバーをハイライト
+      membersEl.querySelectorAll('.member-item').forEach(el => el.classList.remove('selected'))
+      item.classList.add('selected')
+
+      // 履歴を読み込む
+      await loadHistoryForMember(selectedFamilyId, memberSub, memberName || '')
+    })
+  })
+
   // 通知ボタンのイベント
   membersEl.querySelectorAll('.notify-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
+      e.stopPropagation() // メンバーアイテムのクリックイベントを防ぐ
       const target = e.currentTarget as HTMLButtonElement
       const targetSub = target.getAttribute('data-target-sub')
       const targetName = target.getAttribute('data-name')
