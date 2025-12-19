@@ -84,8 +84,20 @@ export class CicdStack extends cdk.Stack {
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       },
       defaultRootObject: 'index.html',
-      // MPA: 各ディレクトリにindex.htmlがあるのでSPAフォールバックは不要
-      // CloudFront Functionsでディレクトリアクセス時にindex.htmlを追加
+      errorResponses: [
+        {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.seconds(0),
+        },
+        {
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.seconds(0),
+        },
+      ],
     })
 
     // CloudFront Function: ディレクトリアクセス時に /index.html を追加
@@ -95,12 +107,22 @@ function handler(event) {
   var request = event.request;
   var uri = request.uri;
   
+  // 既に index.html で終わっている場合はそのまま返す
+  if (uri.endsWith('index.html')) {
+    return request;
+  }
+  
+  // アセットファイル（拡張子がある）はそのまま返す
+  if (uri.includes('.') && !uri.endsWith('/')) {
+    return request;
+  }
+  
   // URIが / で終わる場合は index.html を追加
   if (uri.endsWith('/')) {
     request.uri += 'index.html';
   }
   // 拡張子がない場合は /index.html を追加
-  else if (!uri.includes('.')) {
+  else {
     request.uri += '/index.html';
   }
   
