@@ -347,8 +347,8 @@ function renderLoggedIn(me: MeResponse) {
     setSelectedFamilyId(selectedFamilyId)
   }
 
-  app.innerHTML = `
-    <div class="card">
+app.innerHTML = `
+  <div class="card">
       <h1 class="h1">マイページ</h1>
       
       <div class="user-info">
@@ -967,8 +967,8 @@ async function loadMembers(me: MeResponse) {
       ` : `
         <button class="btn btn-warning" id="leaveFamilyBtn">🚪 ファミリーを退出</button>
       `}
-    </div>
-  `
+  </div>
+`
 
   membersEl.innerHTML = `
     ${inviteCodeHtml}
@@ -1152,9 +1152,6 @@ async function loadAndRender() {
     return
   }
 
-  // 現在表示されているタブを保存（currentTab変数を使用）
-  const savedTab = currentTab
-  
   // データ読み込み状態をリセット（更新ボタンが押された場合）
   tabDataLoaded = { mypage: false, settings: false }
   
