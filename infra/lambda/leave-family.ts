@@ -32,7 +32,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return json(400, { ok: false, message: "Owner cannot leave. Delete the family or transfer ownership first." })
   }
 
-  // メンバーシップを削除
+  // メンバーシップを削除（pk: USER#${sub}, sk: FAMILY#${familyId}）
   await doc.send(new DeleteCommand({
     TableName: TABLE_NAME,
     Key: {

@@ -25,6 +25,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const familyId = invite.Item?.familyId as string | undefined
   if (!familyId) return json(404, { ok: false, message: "invite code not found" })
 
+  // ユーザープロファイルからdisplayNameを取得（あれば）
+  const profileQuery = await doc.send(new GetCommand({
+    TableName: TABLE_NAME,
+    Key: { pk: `USER#${sub}`, sk: "PROFILE" },
+  }))
+  const displayName = profileQuery.Item?.displayName as string | undefined
+
   // すでに参加済みなら上書きしない（Conditionで防ぐ）
   const now = new Date().toISOString()
   try {
@@ -37,6 +44,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         userSub: sub,
         role: "member",
         joinedAt: now,
+        displayName, // プロファイルから取得したdisplayNameを保存
         // GSI1: FAMILY → MEMBERs lookup
         gsi1pk: `FAMILY#${familyId}`,
         gsi1sk: `MEMBER#${sub}`,

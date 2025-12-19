@@ -41,32 +41,20 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }))
 
   // 各メンバーシップのdisplayNameを更新
+  // メンバーシップアイテム（pk: USER#${sub}, sk: FAMILY#${familyId}）にdisplayNameを直接保存
   for (const membership of membershipsQuery.Items ?? []) {
     const familyId = membership.familyId as string
     if (familyId) {
-      // メンバーシップのdisplayNameを更新
+      // メンバーシップのdisplayNameを更新（既存のアイテムを更新）
+      // pk: USER#${sub}, sk: FAMILY#${familyId} のアイテムを更新
       await doc.send(new PutCommand({
         TableName: TABLE_NAME,
         Item: {
           ...membership,
-          displayName,
-        },
-      }))
-
-      // GSI1のdisplayNameも更新
-      await doc.send(new PutCommand({
-        TableName: TABLE_NAME,
-        Item: {
-          pk: `FAMILY#${familyId}`,
-          sk: `MEMBER#${sub}`,
-          gsi1pk: `FAMILY#${familyId}`,
-          gsi1sk: `MEMBER#${sub}`,
-          entity: "MEMBERSHIP",
-          userSub: sub,
-          familyId,
-          role: membership.role,
-          joinedAt: membership.joinedAt,
-          displayName,
+          displayName, // メンバーシップアイテムに直接保存
+          // GSI1の属性も確実に含める
+          gsi1pk: membership.gsi1pk || `FAMILY#${familyId}`,
+          gsi1sk: membership.gsi1sk || `MEMBER#${sub}`,
         },
       }))
     }

@@ -1,5 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda"
-import { QueryCommand, ScanCommand, GetCommand } from "@aws-sdk/lib-dynamodb"
+import { QueryCommand, ScanCommand, GetCommand, BatchGetCommand } from "@aws-sdk/lib-dynamodb"
 import { doc, TABLE_NAME } from "./db"
 import { json, getSub } from "./_shared"
 import { assertFamilyMember } from "./authz"
@@ -64,12 +64,53 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }))
 
   if (gsi1Query.Items && gsi1Query.Items.length > 0) {
-    members = gsi1Query.Items.map((item) => ({
-      sub: item.userSub as string,
-      role: item.role as string,
-      joinedAt: item.joinedAt as string,
-      displayName: item.displayName as string | undefined,
-    }))
+    // GSI1から取得したメンバーをマップ（subでユニークにする）
+    const memberMap = new Map<string, {
+      sub: string
+      role: string
+      joinedAt: string
+      displayName?: string
+    }>()
+    
+    // プロファイルからdisplayNameを取得するためのバッチ取得
+    const profileKeys = gsi1Query.Items
+      .filter(item => item.pk?.startsWith("USER#"))
+      .map(item => ({ pk: item.pk as string, sk: "PROFILE" }))
+    
+    const profileMap = new Map<string, string>()
+    if (profileKeys.length > 0) {
+      const batchResult = await doc.send(new BatchGetCommand({
+        RequestItems: {
+          [TABLE_NAME]: { Keys: profileKeys },
+        },
+      }))
+      
+      for (const profile of batchResult.Responses?.[TABLE_NAME] ?? []) {
+        const userSub = profile.userSub as string
+        const displayName = profile.displayName as string | undefined
+        if (userSub && displayName) {
+          profileMap.set(userSub, displayName)
+        }
+      }
+    }
+    
+    for (const item of gsi1Query.Items) {
+      const sub = item.userSub as string
+      // pkがUSER#で始まるアイテムのみを対象とする（正しいメンバーシップアイテム）
+      // pk: FAMILY#${familyId}, sk: MEMBER#${sub} のような重複アイテムを除外
+      if (sub && item.pk?.startsWith("USER#") && !memberMap.has(sub)) {
+        // メンバーシップアイテムのdisplayNameを優先、なければプロファイルから取得
+        const displayName = item.displayName as string | undefined || profileMap.get(sub)
+        memberMap.set(sub, {
+          sub,
+          role: item.role as string,
+          joinedAt: item.joinedAt as string,
+          displayName,
+        })
+      }
+    }
+    
+    members = Array.from(memberMap.values())
   } else {
     // 方法2: GSI1にデータがない場合、スキャンで取得（既存データ対応）
     // 注: データ量が少ない前提（ハッカソン用）
@@ -81,14 +122,58 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       },
     }))
 
-    members = (scanResult.Items ?? [])
-      .filter(item => item.pk?.startsWith("USER#"))
-      .map((item) => ({
-        sub: (item.pk as string).replace("USER#", ""),
-        role: item.role as string ?? "member",
-        joinedAt: item.joinedAt as string ?? "",
-        displayName: item.displayName as string | undefined,
+    // subでユニークにする
+    const memberMap = new Map<string, {
+      sub: string
+      role: string
+      joinedAt: string
+      displayName?: string
+    }>()
+    
+    // プロファイルからdisplayNameを取得するためのバッチ取得
+    const userSubs = new Set<string>()
+    for (const item of scanResult.Items ?? []) {
+      if (item.pk?.startsWith("USER#")) {
+        const sub = (item.pk as string).replace("USER#", "")
+        userSubs.add(sub)
+      }
+    }
+    
+    const profileMap = new Map<string, string>()
+    if (userSubs.size > 0) {
+      const profileKeys = Array.from(userSubs).map(sub => ({ pk: `USER#${sub}`, sk: "PROFILE" }))
+      const batchResult = await doc.send(new BatchGetCommand({
+        RequestItems: {
+          [TABLE_NAME]: { Keys: profileKeys },
+        },
       }))
+      
+      for (const profile of batchResult.Responses?.[TABLE_NAME] ?? []) {
+        const userSub = profile.userSub as string
+        const displayName = profile.displayName as string | undefined
+        if (userSub && displayName) {
+          profileMap.set(userSub, displayName)
+        }
+      }
+    }
+    
+    for (const item of scanResult.Items ?? []) {
+      if (item.pk?.startsWith("USER#")) {
+        const sub = (item.pk as string).replace("USER#", "")
+        if (!memberMap.has(sub)) {
+          // メンバーシップアイテムのdisplayNameを優先、なければプロファイルから取得
+          const displayName = item.displayName as string | undefined || profileMap.get(sub)
+          memberMap.set(sub, {
+            sub,
+            role: item.role as string ?? "member",
+            joinedAt: item.joinedAt as string ?? "",
+            displayName,
+          })
+        }
+      }
+    }
+    
+    members = Array.from(memberMap.values())
   }
 
   return json(200, {

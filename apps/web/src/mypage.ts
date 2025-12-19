@@ -73,6 +73,7 @@ function setSelectedFamilyId(id: string | null) {
 
 let selectedFamilyId: string | null = getSelectedFamilyId()
 let currentTab: 'mypage' | 'settings' = 'mypage' // 現在のタブ
+let tabDataLoaded: { mypage: boolean; settings: boolean } = { mypage: false, settings: false } // タブごとのデータ読み込み状態
 
 // --- API calls ---
 async function fetchMe(): Promise<MeResponse | null> {
@@ -407,8 +408,9 @@ function renderLoggedIn(me: MeResponse) {
           settingsContent?.classList.add('hidden')
           currentTab = 'mypage'
           // マイページタブのデータを読み込む（初回のみ）
-          if (mypageContent?.querySelector('#mypageStats')?.textContent?.includes('読み込み中')) {
+          if (!tabDataLoaded.mypage) {
             loadMypageTab()
+            tabDataLoaded.mypage = true
           }
         } else {
           settingsContent?.classList.remove('hidden')
@@ -417,33 +419,56 @@ function renderLoggedIn(me: MeResponse) {
           mypageContent?.classList.add('hidden')
           currentTab = 'settings'
           // 設定タブのデータを読み込む（初回のみ）
-          const historyEl = document.getElementById('historyList')
-          if (historyEl?.textContent?.includes('読み込み中')) {
+          if (!tabDataLoaded.settings) {
             loadHistory()
             loadMembers(me)
+            tabDataLoaded.settings = true
           }
         }
       }
     })
   })
 
-  // 初期タブのイベントリスナーを設定
+  // 現在表示されているタブに応じてイベントリスナーとデータを読み込む
+  // 注意: renderLoggedInが呼ばれるとDOMが再生成されるため、タブの状態はcurrentTab変数に基づく
   if (currentTab === 'settings') {
     setupSettingsTabEvents(me)
-    loadHistory()
-    loadMembers(me)
+    if (!tabDataLoaded.settings) {
+      loadHistory()
+      loadMembers(me)
+      tabDataLoaded.settings = true
+    }
   } else {
     setupMypageTabEvents()
-    loadMypageTab()
+    if (!tabDataLoaded.mypage) {
+      loadMypageTab()
+      tabDataLoaded.mypage = true
+    }
   }
 }
 
 // マイページタブのイベント設定
 function setupMypageTabEvents() {
-  document.getElementById('refresh')!.addEventListener('click', () => loadAndRender())
-  document.getElementById('logout')!.addEventListener('click', () => logout())
+  // 既存のイベントリスナーを削除してから追加（重複防止）
+  const refreshBtn = document.getElementById('refresh')
+  const logoutBtn = document.getElementById('logout')
   
-  // 名前更新ボタン（マイページタブにも表示される場合）
+  if (refreshBtn) {
+    const newRefreshBtn = refreshBtn.cloneNode(true)
+    refreshBtn.parentNode?.replaceChild(newRefreshBtn, refreshBtn)
+    newRefreshBtn.addEventListener('click', () => {
+      tabDataLoaded.mypage = false // マイページタブのデータ読み込み状態をリセット
+      loadAndRender()
+    })
+  }
+  
+  if (logoutBtn) {
+    const newLogoutBtn = logoutBtn.cloneNode(true)
+    logoutBtn.parentNode?.replaceChild(newLogoutBtn, logoutBtn)
+    newLogoutBtn.addEventListener('click', () => logout())
+  }
+  
+  // 名前更新ボタン
   const updateDisplayNameBtn = document.getElementById('updateDisplayName')
   const userDisplayNameInput = document.getElementById('userDisplayName') as HTMLInputElement
   if (updateDisplayNameBtn && userDisplayNameInput) {
@@ -759,13 +784,30 @@ function setupSettingsTabEvents(me: MeResponse) {
     })
   }
 
-  document.getElementById('refresh')!.addEventListener('click', () => loadAndRender())
-  document.getElementById('logout')!.addEventListener('click', () => logout())
+  // 既存のイベントリスナーを削除してから追加（重複防止）
+  const refreshBtn = document.getElementById('refresh')
+  const logoutBtn = document.getElementById('logout')
+  
+  if (refreshBtn) {
+    const newRefreshBtn = refreshBtn.cloneNode(true)
+    refreshBtn.parentNode?.replaceChild(newRefreshBtn, refreshBtn)
+    newRefreshBtn.addEventListener('click', () => {
+      tabDataLoaded.settings = false // 設定タブのデータ読み込み状態をリセット
+      loadAndRender()
+    })
+  }
+  
+  if (logoutBtn) {
+    const newLogoutBtn = logoutBtn.cloneNode(true)
+    logoutBtn.parentNode?.replaceChild(newLogoutBtn, logoutBtn)
+    newLogoutBtn.addEventListener('click', () => logout())
+  }
 
-  // 履歴・メンバー読み込み
-  if (selectedFamilyId) {
+  // 履歴・メンバー読み込み（初回のみ）
+  if (selectedFamilyId && !tabDataLoaded.settings) {
     loadHistory()
     loadMembers(me)
+    tabDataLoaded.settings = true
   }
 }
 
@@ -1110,7 +1152,15 @@ async function loadAndRender() {
     return
   }
 
+  // 現在表示されているタブを保存（currentTab変数を使用）
+  const savedTab = currentTab
+  
+  // データ読み込み状態をリセット（更新ボタンが押された場合）
+  tabDataLoaded = { mypage: false, settings: false }
+  
   renderLoggedIn(me)
+  
+  // renderLoggedIn内で既にデータが読み込まれるため、ここでは追加の処理は不要
 }
 
 // --- Main ---

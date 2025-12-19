@@ -1,5 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda"
-import { PutCommand } from "@aws-sdk/lib-dynamodb"
+import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb"
 import { randomUUID, createHash, randomBytes } from "crypto"
 import { doc, TABLE_NAME } from "./db"
 import { json, getSub } from "./_shared"
@@ -55,6 +55,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     ConditionExpression: "attribute_not_exists(pk)",
   }))
 
+  // ユーザープロファイルからdisplayNameを取得（あれば）
+  const profileQuery = await doc.send(new GetCommand({
+    TableName: TABLE_NAME,
+    Key: { pk: `USER#${sub}`, sk: "PROFILE" },
+  }))
+  const displayName = profileQuery.Item?.displayName as string | undefined
+
   // 3) Membership（作成者は owner）
   await doc.send(new PutCommand({
     TableName: TABLE_NAME,
@@ -65,6 +72,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       userSub: sub,
       role: "owner",
       joinedAt: now,
+      displayName, // プロファイルから取得したdisplayNameを保存
       // GSI1: FAMILY → MEMBERs lookup
       gsi1pk: `FAMILY#${familyId}`,
       gsi1sk: `MEMBER#${sub}`,
