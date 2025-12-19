@@ -167,24 +167,6 @@ async function updateProfile(displayName: string): Promise<{ ok: boolean; messag
   }
 }
 
-async function recordHandwashEvent(familyId: string, mode?: string): Promise<{ ok: boolean; message?: string }> {
-  const idToken = getIdToken()
-  if (!idToken) return { ok: false, message: 'Not logged in' }
-
-  try {
-    const res = await fetch(`${API_URL}/handwash/events`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ familyId, mode, durationSec: 20 }),
-    })
-    return await res.json()
-  } catch (e) {
-    return { ok: false, message: String(e) }
-  }
-}
 
 async function fetchFamilyMembers(familyId: string): Promise<MembersResponse | null> {
   const idToken = getIdToken()
@@ -389,7 +371,7 @@ function renderLoggedIn(me: MeResponse) {
       <!-- タブコンテンツ（両方読み込んで表示/非表示で切り替え） -->
       <div class="tab-content">
         <div id="mypageTabContent" class="tab-pane ${currentTab === 'mypage' ? 'active' : 'hidden'}">
-          ${renderMypageTab(me)}
+          ${renderMypageTab()}
         </div>
         <div id="settingsTabContent" class="tab-pane ${currentTab === 'settings' ? 'active' : 'hidden'}">
           ${renderSettingsTab(me)}
