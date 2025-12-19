@@ -36,9 +36,16 @@ export async function subscribePush(idToken: string, familyId: string): Promise<
       return { ok: false, message: '通知が許可されませんでした' }
     }
 
-    // Service Worker登録
-    const registration = await navigator.serviceWorker.register('/sw.js')
-    await navigator.serviceWorker.ready
+    // Service Worker登録（既に他のファイルで登録されているはず）
+    let registration = await navigator.serviceWorker.getRegistration()
+    if (!registration) {
+      // まだ登録されていない場合は待機（他のファイルで登録中かもしれない）
+      await navigator.serviceWorker.ready
+      registration = await navigator.serviceWorker.getRegistration()
+      if (!registration) {
+        return { ok: false, message: 'Service Workerが登録されていません' }
+      }
+    }
 
     // 既存の購読があるかチェック
     let subscription = await registration.pushManager.getSubscription()
