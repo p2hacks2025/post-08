@@ -2,14 +2,14 @@ import type { APIGatewayProxyHandlerV2 } from "aws-lambda"
 import { PutCommand } from "@aws-sdk/lib-dynamodb"
 import { createHash } from "crypto"
 import { doc, TABLE_NAME } from "./db"
-import { json, getSub } from "./_shared"
+import { json, getSub, withErrorHandling } from "./_shared"
 import { assertFamilyMember } from "./authz"
 
 function sha256Hex(s: string): string {
   return createHash("sha256").update(s).digest("hex")
 }
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const handlerImpl: APIGatewayProxyHandlerV2 = async (event) => {
   try {
     const sub = getSub(event)
     const body = event.body ? JSON.parse(event.body) : {}
@@ -51,4 +51,6 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return json(500, { ok: false, message: e?.message ?? "internal error" })
   }
 }
+
+export const handler = withErrorHandling(handlerImpl, 'PushSubscribeFunction')
 

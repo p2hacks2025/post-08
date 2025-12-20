@@ -1,10 +1,10 @@
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda"
 import { QueryCommand, ScanCommand, GetCommand, BatchGetCommand } from "@aws-sdk/lib-dynamodb"
 import { doc, TABLE_NAME } from "./db"
-import { json, getSub } from "./_shared"
+import { json, getSub, withErrorHandling } from "./_shared"
 import { assertFamilyMember } from "./authz"
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const handlerImpl: APIGatewayProxyHandlerV2 = async (event) => {
   const sub = getSub(event)
   const familyId = event.queryStringParameters?.familyId
 
@@ -185,3 +185,5 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     inviteCode: isOwner ? (familyMeta.Item?.inviteCode as string | undefined) : undefined,
   })
 }
+
+export const handler = withErrorHandling(handlerImpl, 'ListFamilyMembersFunction')

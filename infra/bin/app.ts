@@ -39,4 +39,6 @@ new ApiStack(app, 'ApiStack', {
   userPool: auth.userPool,
   userPoolClient: auth.userPoolClient,
   webDistributionDomain: cicd.distribution.distributionDomainName,
+  // エラー通知用のメールアドレス（オプション、環境変数から取得）
+  alertEmail: process.env.ALERT_EMAIL,
 })

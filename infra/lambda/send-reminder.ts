@@ -3,6 +3,7 @@ import { QueryCommand, DeleteCommand, ScanCommand } from "@aws-sdk/lib-dynamodb"
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager"
 import * as webpush from "web-push"
 import { doc, TABLE_NAME } from "./db"
+import { log, notifyError } from "./_shared"
 
 const secretsClient = new SecretsManagerClient({})
 const VAPID_SECRET_NAME = process.env.VAPID_SECRET_NAME || "handwash/vapid"
@@ -105,70 +106,86 @@ async function getAllPushSubscriptions(): Promise<any[]> {
   return items
 }
 
-export const handler: ScheduledHandler = async () => {
-  console.log("Reminder Lambda started")
+const handlerImpl: ScheduledHandler = async () => {
+  try {
+    log('info', 'Reminder Lambda started')
 
-  await setupVapid()
+    await setupVapid()
 
-  const todayStart = getTodayStartJST()
-  console.log(`Today start (JST): ${new Date(todayStart).toISOString()}`)
+    const todayStart = getTodayStartJST()
+    log('info', 'Today start (JST) calculated', { todayStart: new Date(todayStart).toISOString() })
 
-  // 全購読を取得
-  const allSubscriptions = await getAllPushSubscriptions()
-  console.log(`Found ${allSubscriptions.length} push subscriptions`)
+    // 全購読を取得
+    const allSubscriptions = await getAllPushSubscriptions()
+    log('info', 'Push subscriptions retrieved', { count: allSubscriptions.length })
 
-  // ファミリーごとにグループ化
-  const familyMap = new Map<string, any[]>()
-  for (const item of allSubscriptions) {
-    const fid = item.familyId as string
-    if (!familyMap.has(fid)) familyMap.set(fid, [])
-    familyMap.get(fid)!.push(item)
-  }
+    // ファミリーごとにグループ化
+    const familyMap = new Map<string, any[]>()
+    for (const item of allSubscriptions) {
+      const fid = item.familyId as string
+      if (!familyMap.has(fid)) familyMap.set(fid, [])
+      familyMap.get(fid)!.push(item)
+    }
 
-  let sentCount = 0
-  let skippedCount = 0
-  let errorCount = 0
+    let sentCount = 0
+    let skippedCount = 0
+    let errorCount = 0
 
-  for (const [familyId, subs] of familyMap) {
-    const washedUsers = await getTodayWashedUsers(familyId, todayStart)
-    console.log(`Family ${familyId}: ${washedUsers.size} users washed today`)
+    for (const [familyId, subs] of familyMap) {
+      const washedUsers = await getTodayWashedUsers(familyId, todayStart)
+      log('info', 'Family processed', { familyId, washedUsersCount: washedUsers.size, subscriptionsCount: subs.length })
 
-    for (const sub of subs) {
-      const userSub = sub.userSub as string
+      for (const sub of subs) {
+        const userSub = sub.userSub as string
 
-      // 今日既に手洗いしていたらスキップ
-      if (washedUsers.has(userSub)) {
-        console.log(`User ${userSub} already washed today, skipping`)
-        skippedCount++
-        continue
-      }
+        // 今日既に手洗いしていたらスキップ
+        if (washedUsers.has(userSub)) {
+          log('info', 'User already washed today, skipping', { userSub })
+          skippedCount++
+          continue
+        }
 
-      const pushSubscription = {
-        endpoint: sub.endpoint,
-        keys: sub.keys,
-      }
+        const pushSubscription = {
+          endpoint: sub.endpoint,
+          keys: sub.keys,
+        }
 
-      const payload = JSON.stringify({
-        title: "🧼 手洗いリマインド",
-        body: "今日の手洗い、忘れてない？",
-        url: "/",
-      })
+        const payload = JSON.stringify({
+          title: "🧼 手洗いリマインド",
+          body: "今日の手洗い、忘れてない？",
+          url: "/",
+        })
 
-      try {
-        await webpush.sendNotification(pushSubscription, payload)
-        sentCount++
-        console.log(`Sent reminder to user ${userSub}`)
-      } catch (e: any) {
-        errorCount++
-        console.error(`Failed to send to user ${userSub}:`, e?.statusCode, e?.message)
+        try {
+          await webpush.sendNotification(pushSubscription, payload)
+          sentCount++
+          log('info', 'Reminder sent', { userSub })
+        } catch (e: any) {
+          errorCount++
+          log('error', 'Failed to send reminder', { 
+            userSub, 
+            statusCode: e?.statusCode, 
+            message: e?.message 
+          })
 
-        // 410 Gone or 404 = 購読が無効になった
-        if (e?.statusCode === 410 || e?.statusCode === 404) {
-          await deleteSubscription(sub.pk, sub.sk)
+          // 410 Gone or 404 = 購読が無効になった
+          if (e?.statusCode === 410 || e?.statusCode === 404) {
+            await deleteSubscription(sub.pk, sub.sk)
+          }
         }
       }
     }
-  }
 
-  console.log(`Reminder completed: sent=${sentCount}, skipped=${skippedCount}, errors=${errorCount}`)
+    log('info', 'Reminder completed', { sentCount, skippedCount, errorCount })
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error))
+    log('error', 'Reminder Lambda failed', {
+      error: err.message,
+      stack: err.stack,
+    })
+    await notifyError('SendReminderFunction', err)
+    throw error
+  }
 }
+
+export const handler = handlerImpl

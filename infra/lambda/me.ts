@@ -1,9 +1,12 @@
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda"
 import { BatchGetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb"
 import { doc, TABLE_NAME } from "./db"
-import { json } from "./_shared"
+import { json, log, withErrorHandling } from "./_shared"
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const handlerImpl: APIGatewayProxyHandlerV2 = async (event) => {
+  log('info', 'Processing /me request', {
+    requestId: event.requestContext?.requestId,
+  })
   const claims = event?.requestContext?.authorizer?.jwt?.claims || {}
   const sub = String(claims.sub ?? "")
 
@@ -51,7 +54,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
   }
 
-  return json(200, {
+  const response = {
     ok: true,
     sub: claims.sub,
     email: claims.email,
@@ -60,6 +63,15 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     iss: claims.iss,
     aud: claims.aud,
     families,
+  }
+
+  log('info', 'Successfully retrieved user info', {
+    sub: claims.sub,
+    familyCount: families.length,
   })
+
+  return json(200, response)
 }
+
+export const handler = withErrorHandling(handlerImpl, 'MeFunction')
 

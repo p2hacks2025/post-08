@@ -54,6 +54,8 @@ jobs:
       # ===========================================
       - name: CDK Deploy
         working-directory: infra
+        env:
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         run: |
           npm ci
           npx cdk deploy --all --require-approval never

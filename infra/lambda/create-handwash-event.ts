@@ -2,7 +2,7 @@ import type { APIGatewayProxyHandlerV2 } from "aws-lambda"
 import { PutCommand } from "@aws-sdk/lib-dynamodb"
 import { randomUUID } from "crypto"
 import { doc, TABLE_NAME } from "./db"
-import { json, getSub } from "./_shared"
+import { json, getSub, withErrorHandling } from "./_shared"
 import { assertFamilyMember } from "./authz"
 
 function pad13(n: number): string {
@@ -57,4 +57,6 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return json(500, { ok: false, message: e?.message ?? "internal error" })
   }
 }
+
+export const handler = withErrorHandling(handlerImpl, 'CreateHandwashEventFunction')
 

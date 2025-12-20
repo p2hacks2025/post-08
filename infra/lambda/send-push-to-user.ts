@@ -3,7 +3,7 @@ import { QueryCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb"
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager"
 import webpush from "web-push"
 import { doc, TABLE_NAME } from "./db"
-import { json, getSub } from "./_shared"
+import { json, getSub, withErrorHandling } from "./_shared"
 import { assertFamilyMember } from "./authz"
 
 const sm = new SecretsManagerClient({})
@@ -18,7 +18,7 @@ async function getVapidKeys() {
   return cachedVapid!
 }
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const handlerImpl: APIGatewayProxyHandlerV2 = async (event) => {
   const sub = getSub(event) // 送信者
   const body = event.body ? JSON.parse(event.body) : {}
   
@@ -103,4 +103,6 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
   return json(200, { ok: true, sent, failed })
 }
+
+export const handler = withErrorHandling(handlerImpl, 'SendPushToUserFunction')
 

@@ -2,7 +2,7 @@ import type { APIGatewayProxyHandlerV2 } from "aws-lambda"
 import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb"
 import { randomUUID, createHash, randomBytes } from "crypto"
 import { doc, TABLE_NAME } from "./db"
-import { json, getSub } from "./_shared"
+import { json, getSub, withErrorHandling } from "./_shared"
 
 function makeInviteCode(): string {
   // 例: ABCD-EFGH（見やすい招待コード）
@@ -15,7 +15,7 @@ function sha256Hex(s: string): string {
   return createHash("sha256").update(s).digest("hex")
 }
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const handlerImpl: APIGatewayProxyHandlerV2 = async (event) => {
   const sub = getSub(event)
 
   const body = event.body ? JSON.parse(event.body) : {}
@@ -81,4 +81,6 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
   return json(200, { ok: true, familyId, name, inviteCode })
 }
+
+export const handler = withErrorHandling(handlerImpl, 'CreateFamilyFunction')
 

@@ -1,9 +1,9 @@
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda"
 import { DeleteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb"
 import { doc, TABLE_NAME } from "./db"
-import { json, getSub } from "./_shared"
+import { json, getSub, withErrorHandling } from "./_shared"
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const handlerImpl: APIGatewayProxyHandlerV2 = async (event) => {
   const sub = getSub(event)
   const body = event.body ? JSON.parse(event.body) : {}
   const familyId = String(body?.familyId ?? "").trim()
@@ -62,5 +62,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
   return json(200, { ok: true, message: "Left the family successfully" })
 }
+
+export const handler = withErrorHandling(handlerImpl, 'LeaveFamilyFunction')
 
 
