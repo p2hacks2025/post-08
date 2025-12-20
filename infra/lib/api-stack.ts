@@ -317,16 +317,19 @@ export class ApiStack extends cdk.Stack {
       },
     })
 
-    // WAFをAPI Gatewayにアタッチ（HTTP APIのStage ARN形式）
-    // HTTP APIのStage ARNは arn:aws:apigateway:REGION::/apis/API_ID/stages/STAGE_NAME の形式
-    // HTTP APIにはデフォルトで $default ステージが存在する
-    const httpApiId = httpApi.apiId
-    const httpApiStageArn = `arn:aws:apigateway:${this.region}::/apis/${httpApiId}/stages/$default`
-    
-    new wafv2.CfnWebACLAssociation(this, 'ApiWebACLAssociation', {
-      resourceArn: httpApiStageArn,
-      webAclArn: webAcl.attrArn,
-    })
+    // WAFをAPI Gatewayにアタッチ
+    // 注意: HTTP API (apigatewayv2) にはWAFを直接アタッチできません
+    // WAFを使う場合は REST API (apigateway) に切り替える必要があります
+    // または CloudFront + WAF (CLOUDFRONT scope) を前段に置く方法もあります
+    // 一旦、WAF Associationはコメントアウトしてデプロイを通します
+    // 
+    // const httpApiId = httpApi.apiId
+    // const httpApiStageArn = `arn:aws:apigateway:${this.region}::/apis/${httpApiId}/stages/$default`
+    // 
+    // new wafv2.CfnWebACLAssociation(this, 'ApiWebACLAssociation', {
+    //   resourceArn: httpApiStageArn,
+    //   webAclArn: webAcl.attrArn,
+    // })
 
     // 7) JWT Authorizer
     const jwtAuthorizer = new authorizers.HttpJwtAuthorizer(
