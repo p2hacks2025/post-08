@@ -827,6 +827,7 @@ li {
   transform: translate(-50%, -50%) translateY(100vh);
   transition: transform 2.7s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-out; /* opacityのtransitionも追加 */
   pointer-events: none;
+  overflow: visible;
 }
 
 .main-big-bubble.visible {
@@ -881,8 +882,8 @@ li {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 20px;
+  justify-content: space-between;
+  padding: 40px 20px;
   opacity: 0;
   transition: opacity 0.4s ease-out;
   pointer-events: none;
@@ -906,7 +907,7 @@ li {
   padding: 10px 24px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.4);
-  margin-bottom: 40px;
+  margin-top: 20px;
 }
 
 .wash-timer-display {
@@ -918,21 +919,54 @@ li {
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
-/* 中央のアニメーション表示エリア */
-.animation-container {
-  width: min(220px, 55vw);
-  height: min(220px, 55vw);
+/* 中央のアニメーション表示エリア（大きな泡の中） */
+.main-big-bubble .animation-container {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
   overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: 50%;
 }
 
 .handwash-anim {
-  width: 80%;
-  height: 80%;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 動画の進捗リング（大きな泡の周囲） */
+.video-progress-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.video-progress-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 3;
+}
+
+.video-progress-bar {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.8);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 282.743; /* 2 * π * 45 */
+  stroke-dashoffset: 282.743;
+  transition: stroke-dashoffset 0.1s linear;
 }
 
 .status-text {
@@ -949,7 +983,7 @@ li {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  margin-top: 40px;
+  margin-bottom: 20px;
 }
 
 /* 泡風ボタン（共通） */
@@ -1186,6 +1220,41 @@ li {
   height: 52px;
   font-size: 16px;
   padding: 0 24px;
+}
+
+/* 完了画面の統計情報 */
+.done-stats {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.done-stat-item {
+  text-align: center;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 16px;
+  backdrop-filter: blur(6px);
+  min-width: 80px;
+}
+
+.done-stat-value {
+  font-size: 36px;
+  font-weight: 900;
+  color: white;
+  line-height: 1;
+  margin-bottom: 6px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.done-stat-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+  opacity: 0.95;
 }
 
 /* メンバー一覧 */
@@ -1581,6 +1650,57 @@ body.landing-body #app {
 .landing-section-with-bubbles > *:not(.small-bubble-field) {
   position: relative;
   z-index: 1;
+}
+
+/* キラキラフィールド（完了画面用） */
+.sparkle-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.sparkle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.7));
+  transform: rotate(45deg);
+  box-shadow: 
+    0 0 8px rgba(255, 255, 255, 0.9),
+    0 0 16px rgba(255, 255, 255, 0.6),
+    inset 0 0 6px rgba(255, 255, 255, 1);
+  animation: sparkle-pulse 2s ease-in-out infinite;
+  transform-origin: center;
+  opacity: 0;
+}
+
+@keyframes sparkle-pulse {
+  0% {
+    opacity: 0;
+    transform: rotate(45deg) scale(0);
+  }
+  20% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.2);
+  }
+  40% {
+    opacity: 0.8;
+    transform: rotate(45deg) scale(1);
+  }
+  60% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.3);
+  }
+  80% {
+    opacity: 0.6;
+    transform: rotate(45deg) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(45deg) scale(0);
+  }
 }
 
 .landing-section-title {

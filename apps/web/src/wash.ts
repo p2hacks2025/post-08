@@ -57,6 +57,21 @@ async function ensureFamilySelected(): Promise<boolean> {
 type Mode = 'home' | 'meal'
 type Phase = 'idle' | 'intro' | 'playing' | 'select' | 'done'
 
+type HandwashEvent = {
+  familyId: string
+  eventId: string
+  atMs: number
+  createdBy: string
+  mode?: string
+  durationSec?: number
+  note?: string
+}
+
+type EventsResponse = {
+  ok: boolean
+  events: HandwashEvent[]
+}
+
 const app = document.querySelector<HTMLDivElement>('#app')!
 
 let mode: Mode | null = null
@@ -69,7 +84,13 @@ let bubbleFieldHTML: string | null = null // 泡フィールドのHTMLを保持
 // 泡フィールドのDOM要素を保持
 let bubbleFieldElement: HTMLElement | null = null
 
-function setHTML(html: string) {
+function setHTML(html: string, skipBubbleField = false) {
+  // 完了画面（キラキラフィールド）の場合は泡フィールドを追加しない
+  if (skipBubbleField) {
+    app.innerHTML = html
+    return
+  }
+  
   // 既存の泡フィールドを取得（appの外からも探す）
   if (!bubbleFieldElement) {
     bubbleFieldElement = app.querySelector('.small-bubble-field') as HTMLElement | null
@@ -256,6 +277,96 @@ function generateBubbleField(): string {
   return bubbleFieldHTML
 }
 
+// --- キラキラフィールドを生成（完了画面用）---
+function generateSparkleField(): string {
+  const sparkles: string[] = []
+  const numSparkles = 40 // キラキラの数を増やす
+  
+  for (let i = 0; i < numSparkles; i++) {
+    // 位置をランダムに（5% ~ 95%）
+    const left = 5 + Math.random() * 90
+    const top = 5 + Math.random() * 90
+    // サイズをランダムに（8px ~ 16px）
+    const size = 8 + Math.random() * 8
+    // アニメーション時間をランダムに（1s ~ 2.5s）でより短く
+    const duration = 1 + Math.random() * 1.5
+    // ランダムなdelay（0s ~ 4s）でより長く、様々なタイミングで光るように
+    const delay = Math.random() * 4
+
+    sparkles.push(`
+      <div class="sparkle" style="
+        left: ${left.toFixed(1)}%;
+        top: ${top.toFixed(1)}%;
+        width: ${size.toFixed(1)}px;
+        height: ${size.toFixed(1)}px;
+        animation-duration: ${duration.toFixed(1)}s;
+        animation-delay: ${delay.toFixed(1)}s;
+      "></div>
+    `)
+  }
+
+  return `<div class="sparkle-field">${sparkles.join('')}</div>`
+}
+
+// --- API呼び出し ---
+async function fetchHandwashEvents(familyId: string, createdBy?: string): Promise<EventsResponse | null> {
+  const idToken = getIdToken()
+  if (!idToken) return null
+
+  try {
+    let url = `${API_URL}/handwash/events?familyId=${familyId}&limit=100`
+    if (createdBy) {
+      url += `&createdBy=${encodeURIComponent(createdBy)}`
+    }
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+// --- 継続日数を計算 ---
+function calculateConsecutiveDays(events: HandwashEvent[]): number {
+  if (events.length === 0) return 0
+
+  // 日付ごとにグループ化（JSTで）
+  const dates = new Set<string>()
+  events.forEach(ev => {
+    const date = new Date(ev.atMs)
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    dates.add(dateStr)
+  })
+
+  // 日付をソート
+  const sortedDates = Array.from(dates).sort().reverse()
+
+  if (sortedDates.length === 0) return 0
+
+  // 今日から連続日数を計算
+  let consecutiveDays = 0
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  for (let i = 0; i < sortedDates.length; i++) {
+    const dateStr = sortedDates[i]
+    const checkDate = new Date(dateStr)
+    checkDate.setHours(0, 0, 0, 0)
+
+    const diffDays = Math.floor((today.getTime() - checkDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (diffDays === consecutiveDays) {
+      consecutiveDays++
+    } else {
+      break
+    }
+  }
+
+  return consecutiveDays
+}
+
 // --- タイマー表示更新 ---
 function updateTimerDisplay() {
   const timerEl = document.querySelector('.wash-timer-display')
@@ -273,7 +384,7 @@ function formatTime(seconds: number): string {
 }
 
 // --- Phase遷移 ---
-function transitionToPhase(newPhase: Phase) {
+async function transitionToPhase(newPhase: Phase) {
   if (newPhase === 'intro') {
     renderWashScene()
     // 大きな泡がせり上がる
@@ -314,7 +425,7 @@ function transitionToPhase(newPhase: Phase) {
       renderSelectScene()
     }, 600) // フェードアウト時間（0.3s）+ 余裕
   } else if (newPhase === 'done') {
-    renderDone()
+    await renderDone()
   }
 }
 
@@ -327,15 +438,18 @@ function renderWashScene() {
       <div class="main-big-bubble">
         <div class="bubble-shine"></div>
         <div class="bubble-shine-small"></div>
+        <div class="animation-container">
+          <video src="/steps/handwash.webm" class="handwash-anim" autoplay loop muted playsinline id="handwash-video"></video>
+        </div>
+        <svg class="video-progress-ring" viewBox="0 0 100 100">
+          <circle class="video-progress-bg" cx="50" cy="50" r="45" />
+          <circle class="video-progress-bar" cx="50" cy="50" r="45" id="video-progress-circle" />
+        </svg>
       </div>
 
       <div class="handwash-content">
         <div class="timer-pill">
           <span class="wash-timer-display">0:00</span>
-        </div>
-
-        <div class="animation-container">
-          <video src="/steps/handwash.webm" class="handwash-anim" autoplay loop muted playsinline></video>
         </div>
 
 
@@ -356,6 +470,30 @@ function renderWashScene() {
     createBubbleParticles(rect.left + rect.width / 2, rect.top + rect.height / 2)
     transitionToPhase('select')
   })
+
+  // 動画の進捗を監視してプログレスバーを更新
+  const video = document.getElementById('handwash-video') as HTMLVideoElement
+  if (video) {
+    video.addEventListener('timeupdate', () => {
+      updateVideoProgress(video)
+    })
+    video.addEventListener('loadedmetadata', () => {
+      updateVideoProgress(video)
+    })
+  }
+}
+
+// 動画の進捗を更新
+function updateVideoProgress(video: HTMLVideoElement) {
+  if (!video.duration) return
+  
+  const progress = (video.currentTime / video.duration) * 100
+  const progressCircle = document.getElementById('video-progress-circle')
+  if (progressCircle) {
+    const circumference = 2 * Math.PI * 45 // r=45
+    const offset = circumference - (progress / 100) * circumference
+    progressCircle.style.strokeDashoffset = `${offset}`
+  }
 }
 
 function renderSelectScene() {
@@ -402,8 +540,8 @@ function renderSelectScene() {
     
     mode = 'home'
     await recordHandwash()
-    setTimeout(() => {
-      transitionToPhase('done')
+    setTimeout(async () => {
+      await transitionToPhase('done')
       isSelecting = false
     }, 400) // フェードアウト時間に合わせて調整
   })
@@ -424,25 +562,75 @@ function renderSelectScene() {
     
     mode = 'meal'
     await recordHandwash()
-    setTimeout(() => {
-      transitionToPhase('done')
+    setTimeout(async () => {
+      await transitionToPhase('done')
       isSelecting = false
     }, 400) // フェードアウト時間に合わせて調整
   })
 }
 
-function renderDone() {
+async function renderDone() {
   const modeBadge = mode ? `<div class="done-mode-badge">${modeLabel(mode)}</div>` : ''
   const loggedIn = isLoggedIn()
   const hasFamilyId = !!getSelectedFamilyId()
   const recorded = loggedIn && hasFamilyId
 
-  // 泡フィールドは既に生成済みのHTMLを使用
-  const bubbleField = generateBubbleField()
+  // 統計情報を取得
+  let statsHTML = ''
+  if (loggedIn && hasFamilyId) {
+    const familyId = getSelectedFamilyId()!
+    const idToken = getIdToken()
+    
+    // ユーザーのsubを取得（JWTトークンから）
+    let userSub: string | null = null
+    if (idToken) {
+      try {
+        const payload = JSON.parse(atob(idToken.split('.')[1]))
+        userSub = payload.sub
+      } catch (e) {
+        console.warn('Failed to parse token:', e)
+      }
+    }
+    
+    if (userSub) {
+      const data = await fetchHandwashEvents(familyId, userSub)
+      if (data && data.ok) {
+        const consecutiveDays = calculateConsecutiveDays(data.events)
+        const totalEvents = data.events.length
+        const todayEvents = data.events.filter(ev => {
+          const evDate = new Date(ev.atMs)
+          const today = new Date()
+          return evDate.getDate() === today.getDate() &&
+                 evDate.getMonth() === today.getMonth() &&
+                 evDate.getFullYear() === today.getFullYear()
+        }).length
+
+        statsHTML = `
+          <div class="done-stats">
+            <div class="done-stat-item">
+              <div class="done-stat-value">${consecutiveDays}</div>
+              <div class="done-stat-label">日連続！</div>
+            </div>
+            <div class="done-stat-item">
+              <div class="done-stat-value">${totalEvents}</div>
+              <div class="done-stat-label">回手を洗った</div>
+            </div>
+            <div class="done-stat-item">
+              <div class="done-stat-value">${todayEvents}</div>
+              <div class="done-stat-label">今日の回数</div>
+            </div>
+          </div>
+        `
+      }
+    }
+  }
+
+  // キラキラフィールドを生成（完了画面用）
+  const sparkleField = generateSparkleField()
   
   setHTML(`
     <div class="wash-scene-new">
-      ${bubbleField}
+      ${sparkleField}
 
       <div class="done-content visible">
         ${modeBadge}
@@ -451,6 +639,8 @@ function renderDone() {
         <h1 class="done-title">おつかれさま！</h1>
         <p class="done-subtitle">きれいにできたね。えらい！</p>
         <p class="done-time">${formatTime(elapsedSeconds)} 手を洗いました</p>
+
+        ${statsHTML}
 
         ${recorded ? `
           <div class="done-recorded">✓ 記録しました</div>
@@ -466,7 +656,7 @@ function renderDone() {
         </button>
       </div>
     </div>
-  `)
+  `, true) // skipBubbleField = true で泡フィールドを追加しない
 
   document.getElementById('mypage-btn')!.addEventListener('click', () => {
     location.href = '../mypage/'

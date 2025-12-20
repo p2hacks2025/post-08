@@ -604,7 +604,14 @@ async function loadMypageTab() {
 
   statsEl.innerHTML = '<p class="p muted">読み込み中...</p>'
 
-  const data = await fetchHandwashEvents(selectedFamilyId)
+  // 現在のユーザーのイベントのみを取得
+  const me = await fetchMe()
+  if (!me) {
+    statsEl.innerHTML = '<p class="p muted">ユーザー情報を取得できませんでした</p>'
+    return
+  }
+
+  const data = await fetchHandwashEvents(selectedFamilyId, me.sub)
   if (!data || !data.ok) {
     statsEl.innerHTML = '<p class="p muted">データを取得できませんでした</p>'
     return
