@@ -40,8 +40,7 @@
 ## スクリーンショット
 
 
-![ファミリー設定画面](https://github.com/user-attachments/assets/adcd0181-b60f-41e5-ac41-81cc98b8a75a)
-
+<img width="800" src="https://github.com/user-attachments/assets/adcd0181-b60f-41e5-ac41-81cc98b8a75a" />
 
 ## 開発体制
 
