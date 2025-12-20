@@ -335,7 +335,7 @@ function renderWashScene() {
         </div>
 
         <div class="animation-container">
-          <img src="/steps/01.png" alt="手洗い" class="handwash-anim" />
+          <video src="/steps/handwash.webm" class="handwash-anim" autoplay loop muted playsinline></video>
         </div>
 
 

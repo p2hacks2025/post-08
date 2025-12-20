@@ -10,7 +10,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!
 function renderLoading() {
   app.innerHTML = `
     <div class="card">
-      <h1 class="h1">🧼 手洗いサポート</h1>
+      <h1 class="h1">🧼 ぴかって！</h1>
       <p class="p muted">読み込み中...</p>
     </div>
   `
@@ -23,7 +23,7 @@ function renderHome() {
     <div class="card home-card">
       <div class="home-hero">
         <div class="home-icon">🧼</div>
-        <h1 class="h1">手洗いサポート</h1>
+        <h1 class="h1">ぴかって！</h1>
         <p class="p">家族みんなで楽しく手洗い習慣！</p>
       </div>
 

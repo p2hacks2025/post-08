@@ -31,8 +31,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
       },
       manifest: {
-        name: '手洗いサポート',
-        short_name: '手洗い',
+        name: 'ぴかって！',
+        short_name: 'ぴかって！',
         description: '家族みんなで楽しく手洗い習慣をつけよう！20秒タイマーと履歴管理で手洗いをサポート。',
         display: 'standalone',
         orientation: 'portrait',
