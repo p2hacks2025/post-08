@@ -436,8 +436,6 @@ function renderWashScene() {
       ${generateBubbleField()}
       
       <div class="main-big-bubble">
-        <div class="bubble-shine"></div>
-        <div class="bubble-shine-small"></div>
         <div class="animation-container">
           <video src="/steps/handwash.webm" class="handwash-anim" autoplay loop muted playsinline id="handwash-video"></video>
         </div>
@@ -510,12 +508,10 @@ function renderSelectScene() {
 
         <div class="select-buttons">
           <button class="select-bubble-btn" id="home">
-            <span class="btn-shine"></span>
             <span class="btn-icon">🏠</span>
             <span class="btn-label">帰ってきた後</span>
           </button>
           <button class="select-bubble-btn" id="meal">
-            <span class="btn-shine"></span>
             <span class="btn-icon">🍽️</span>
             <span class="btn-label">ご飯を食べる前</span>
           </button>
