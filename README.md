@@ -39,8 +39,11 @@
 
 ## スクリーンショット
 
+|マイページ画面|ファミリー設定画面|
+|---|---|
+|<img width="200" src="https://github.com/user-attachments/assets/79cb6112-3b80-464c-ac43-7e160e231eb2" />| <img width="200" src="https://github.com/user-attachments/assets/3e690f87-ccb5-4259-b51c-bdacbae40cb2" />  |
 
-<img width="400" src="https://github.com/user-attachments/assets/adcd0181-b60f-41e5-ac41-81cc98b8a75a" />
+
 
 ## 開発体制
 
