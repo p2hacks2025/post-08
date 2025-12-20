@@ -11,7 +11,7 @@ function pad13(n: number): string {
   return s.padStart(13, "0")
 }
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const handlerImpl: APIGatewayProxyHandlerV2 = async (event) => {
   try {
     const sub = getSub(event)
     const body = event.body ? JSON.parse(event.body) : {}
