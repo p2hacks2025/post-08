@@ -70,12 +70,15 @@ ghalgkalhrl
 
 ### 利用したプログラミング言語
 - Java/TypeScript
+
 - HTML/CSS
 
 
 ### 利用したフレームワーク・ライブラリ
 - フロントエンド:Node.js, Vite, Vanilla TypeScript
+  
 - AWS : CDK (Cloud Development Kit), Lambda, API Gateway, DynamoDB, S3, CloudFront
+ 
 - ユーザー認証: Amazon Cognito (Hosted UI / OAuth2 PKCE)
 
 ### その他開発に使用したツール・サービス
