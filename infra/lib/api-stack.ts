@@ -240,70 +240,75 @@ export class ApiStack extends cdk.Stack {
     })
 
     // 6) WAF v2 WebACL
-    const webAcl = new wafv2.CfnWebACL(this, 'ApiWebACL', {
-      defaultAction: { allow: {} },
-      scope: 'REGIONAL', // API Gateway用
-      visibilityConfig: {
-        sampledRequestsEnabled: true,
-        cloudWatchMetricsEnabled: true,
-        metricName: 'ApiWebACL',
-      },
-      rules: [
-        // AWS Managed Rules - Core Rule Set
-        {
-          name: 'AWSManagedRulesCommonRuleSet',
-          priority: 1,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesCommonRuleSet',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudWatchMetricsEnabled: true,
-            metricName: 'CommonRuleSet',
-          },
-        },
-        // AWS Managed Rules - Known Bad Inputs
-        {
-          name: 'AWSManagedRulesKnownBadInputsRuleSet',
-          priority: 2,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesKnownBadInputsRuleSet',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudWatchMetricsEnabled: true,
-            metricName: 'KnownBadInputs',
-          },
-        },
-        // レート制限ルール（1分間に100リクエスト/IP）
-        {
-          name: 'RateLimitRule',
-          priority: 0, // 最優先
-          action: {
-            block: {},
-          },
-          statement: {
-            rateBasedStatement: {
-              limit: 100, // 1分間あたり100リクエスト
-              aggregateKeyType: 'IP',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudWatchMetricsEnabled: true,
-            metricName: 'RateLimitRule',
-          },
-        },
-      ],
-    })
+    // 注意: HTTP API (apigatewayv2) にはWAFを直接アタッチできません
+    // WAFを使う場合は REST API (apigateway) に切り替える必要があります
+    // または CloudFront + WAF (CLOUDFRONT scope) を前段に置く方法もあります
+    // 一旦、WAF関連のコードはコメントアウトしてデプロイを通します
+    // 
+    // const webAcl = new wafv2.CfnWebACL(this, 'ApiWebACL', {
+    //   defaultAction: { allow: {} },
+    //   scope: 'REGIONAL', // API Gateway用
+    //   visibilityConfig: {
+    //     sampledRequestsEnabled: true,
+    //     cloudWatchMetricsEnabled: true,
+    //     metricName: 'ApiWebACL',
+    //   },
+    //   rules: [
+    //     // AWS Managed Rules - Core Rule Set
+    //     {
+    //       name: 'AWSManagedRulesCommonRuleSet',
+    //       priority: 1,
+    //       overrideAction: { none: {} },
+    //       statement: {
+    //         managedRuleGroupStatement: {
+    //           vendorName: 'AWS',
+    //           name: 'AWSManagedRulesCommonRuleSet',
+    //         },
+    //       },
+    //       visibilityConfig: {
+    //         sampledRequestsEnabled: true,
+    //         cloudWatchMetricsEnabled: true,
+    //         metricName: 'CommonRuleSet',
+    //       },
+    //     },
+    //     // AWS Managed Rules - Known Bad Inputs
+    //     {
+    //       name: 'AWSManagedRulesKnownBadInputsRuleSet',
+    //       priority: 2,
+    //       overrideAction: { none: {} },
+    //       statement: {
+    //         managedRuleGroupStatement: {
+    //           vendorName: 'AWS',
+    //           name: 'AWSManagedRulesKnownBadInputsRuleSet',
+    //         },
+    //       },
+    //       visibilityConfig: {
+    //         sampledRequestsEnabled: true,
+    //         cloudWatchMetricsEnabled: true,
+    //         metricName: 'KnownBadInputs',
+    //       },
+    //     },
+    //     // レート制限ルール（1分間に100リクエスト/IP）
+    //     {
+    //       name: 'RateLimitRule',
+    //       priority: 0, // 最優先
+    //       action: {
+    //         block: {},
+    //       },
+    //       statement: {
+    //         rateBasedStatement: {
+    //           limit: 100, // 1分間あたり100リクエスト
+    //           aggregateKeyType: 'IP',
+    //         },
+    //       },
+    //       visibilityConfig: {
+    //         sampledRequestsEnabled: true,
+    //         cloudWatchMetricsEnabled: true,
+    //         metricName: 'RateLimitRule',
+    //       },
+    //     },
+    //   ],
+    // })
 
     // 6) HTTP API
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
