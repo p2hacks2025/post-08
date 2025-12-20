@@ -3,7 +3,7 @@
 ## プロダクト名
 ぴかって！
 
-<img width="1024" height="1024" alt="icon" src="https://github.com/user-attachments/assets/40fefe18-74a4-4b2d-ac7d-f0297e698926" />
+<img width="400" height="400" alt="icon" src="https://github.com/user-attachments/assets/40fefe18-74a4-4b2d-ac7d-f0297e698926" />
 
 ## コンセプト
 **実用的**なものを作りたい！
@@ -43,7 +43,7 @@
 
 |マイページ画面|ファミリー設定画面|手洗い中|手洗い完了|手洗い履歴|
 |---|---|---|---|---|
-|<img width="150" src="https://github.com/user-attachments/assets/79cb6112-3b80-464c-ac43-7e160e231eb2" />| <img width="150" src="https://github.com/user-attachments/assets/3e690f87-ccb5-4259-b51c-bdacbae40cb2" /> |<img width="150" src="https://github.com/user-attachments/assets/04781968-427a-4b19-b417-cc0f3b623a14" />|<img width="150" src="https://github.com/user-attachments/assets/a3739af8-efaa-4aa5-a335-c70e5fae9904" />|<img width="150" src="https://github.com/user-attachments/assets/a2a87365-9f1d-46c8-93de-3718d82f1cc1" />|
+|<img width="170" src="https://github.com/user-attachments/assets/79cb6112-3b80-464c-ac43-7e160e231eb2" />| <img width="170" src="https://github.com/user-attachments/assets/3e690f87-ccb5-4259-b51c-bdacbae40cb2" /> |<img width="170" src="https://github.com/user-attachments/assets/04781968-427a-4b19-b417-cc0f3b623a14" />|<img width="170" src="https://github.com/user-attachments/assets/a3739af8-efaa-4aa5-a335-c70e5fae9904" />|<img width="170" src="https://github.com/user-attachments/assets/a2a87365-9f1d-46c8-93de-3718d82f1cc1" />|
 
 
 
