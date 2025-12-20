@@ -8,7 +8,7 @@ function sha256Hex(s: string): string {
   return createHash("sha256").update(s).digest("hex")
 }
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const handlerImpl: APIGatewayProxyHandlerV2 = async (event) => {
   const sub = getSub(event)
   const body = event.body ? JSON.parse(event.body) : {}
   const inviteCode = String(body?.inviteCode ?? "").trim().toUpperCase()
