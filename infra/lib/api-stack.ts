@@ -317,13 +317,14 @@ export class ApiStack extends cdk.Stack {
       },
     })
 
-    // WAFをAPI Gatewayにアタッチ（HTTP APIのARN形式）
-    // HTTP APIのARNは arn:aws:apigateway:REGION::/apis/API_ID の形式
+    // WAFをAPI Gatewayにアタッチ（HTTP APIのStage ARN形式）
+    // HTTP APIのStage ARNは arn:aws:apigateway:REGION::/apis/API_ID/stages/STAGE_NAME の形式
+    // HTTP APIにはデフォルトで $default ステージが存在する
     const httpApiId = httpApi.apiId
-    const httpApiArn = `arn:aws:apigateway:${this.region}::/apis/${httpApiId}`
+    const httpApiStageArn = `arn:aws:apigateway:${this.region}::/apis/${httpApiId}/stages/$default`
     
     new wafv2.CfnWebACLAssociation(this, 'ApiWebACLAssociation', {
-      resourceArn: httpApiArn,
+      resourceArn: httpApiStageArn,
       webAclArn: webAcl.attrArn,
     })
 
