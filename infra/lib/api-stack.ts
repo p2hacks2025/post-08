@@ -50,19 +50,19 @@ export class ApiStack extends cdk.Stack {
     const vapidSecret = secretsmanager.Secret.fromSecretNameV2(this, 'VapidSecret', vapidSecretName)
 
     // 3) SNS Topic for error notifications（オプション: メール通知が必要な場合のみ）
-    const errorTopic = props.alertEmail ? new sns.Topic(this, 'ErrorNotificationTopic', {
-      displayName: 'Handwash API Error Notifications',
-    }) : undefined
-    
+    const errorTopic = props.alertEmail
+      ? new sns.Topic(this, 'ErrorNotificationTopic', {
+          displayName: 'Handwash API Error Notifications',
+        })
+      : undefined
+
     // メールアドレスが指定されている場合はサブスクリプションを追加
     if (props.alertEmail && errorTopic) {
-      errorTopic.addSubscription(
-        new subscriptions.EmailSubscription(props.alertEmail)
-      )
+      errorTopic.addSubscription(new subscriptions.EmailSubscription(props.alertEmail))
     }
 
     // 3) Lambda functions（コスト最適化: 最小限の設定）
-    const lambdaEnv = { 
+    const lambdaEnv = {
       TABLE_NAME: table.tableName,
       ...(errorTopic && { ERROR_TOPIC_ARN: errorTopic.topicArn }),
     }
@@ -206,12 +206,21 @@ export class ApiStack extends cdk.Stack {
     // SNS Topicへのパブリッシュ権限（エラー通知がある場合のみ）
     if (errorTopic) {
       const lambdaFunctions = [
-        meFn, createFamilyFn, listFamiliesFn, joinFamilyFn,
-        createHandwashEventFn, listHandwashEventsFn, pushSubscribeFn,
-        sendReminderFn, listFamilyMembersFn, sendPushToUserFn,
-        leaveFamilyFn, deleteFamilyFn, updateProfileFn,
+        meFn,
+        createFamilyFn,
+        listFamiliesFn,
+        joinFamilyFn,
+        createHandwashEventFn,
+        listHandwashEventsFn,
+        pushSubscribeFn,
+        sendReminderFn,
+        listFamilyMembersFn,
+        sendPushToUserFn,
+        leaveFamilyFn,
+        deleteFamilyFn,
+        updateProfileFn,
       ]
-      lambdaFunctions.forEach(fn => errorTopic.grantPublish(fn))
+      lambdaFunctions.forEach((fn) => errorTopic.grantPublish(fn))
     }
 
     // 5) EventBridge Scheduler for daily reminder (20:00 JST = 11:00 UTC)
@@ -223,114 +232,30 @@ export class ApiStack extends cdk.Stack {
       targets: [new targets.LambdaFunction(sendReminderFn)],
     })
 
-    // 6) WAF v2 WebACL
-    // 注意: HTTP API (apigatewayv2) にはWAFを直接アタッチできません
-    // WAFを使う場合は REST API (apigateway) に切り替える必要があります
-    // または CloudFront + WAF (CLOUDFRONT scope) を前段に置く方法もあります
-    // 一旦、WAF関連のコードはコメントアウトしてデプロイを通します
-    // 
-    // const webAcl = new wafv2.CfnWebACL(this, 'ApiWebACL', {
-    //   defaultAction: { allow: {} },
-    //   scope: 'REGIONAL', // API Gateway用
-    //   visibilityConfig: {
-    //     sampledRequestsEnabled: true,
-    //     cloudWatchMetricsEnabled: true,
-    //     metricName: 'ApiWebACL',
-    //   },
-    //   rules: [
-    //     // AWS Managed Rules - Core Rule Set
-    //     {
-    //       name: 'AWSManagedRulesCommonRuleSet',
-    //       priority: 1,
-    //       overrideAction: { none: {} },
-    //       statement: {
-    //         managedRuleGroupStatement: {
-    //           vendorName: 'AWS',
-    //           name: 'AWSManagedRulesCommonRuleSet',
-    //         },
-    //       },
-    //       visibilityConfig: {
-    //         sampledRequestsEnabled: true,
-    //         cloudWatchMetricsEnabled: true,
-    //         metricName: 'CommonRuleSet',
-    //       },
-    //     },
-    //     // AWS Managed Rules - Known Bad Inputs
-    //     {
-    //       name: 'AWSManagedRulesKnownBadInputsRuleSet',
-    //       priority: 2,
-    //       overrideAction: { none: {} },
-    //       statement: {
-    //         managedRuleGroupStatement: {
-    //           vendorName: 'AWS',
-    //           name: 'AWSManagedRulesKnownBadInputsRuleSet',
-    //         },
-    //       },
-    //       visibilityConfig: {
-    //         sampledRequestsEnabled: true,
-    //         cloudWatchMetricsEnabled: true,
-    //         metricName: 'KnownBadInputs',
-    //       },
-    //     },
-    //     // レート制限ルール（1分間に100リクエスト/IP）
-    //     {
-    //       name: 'RateLimitRule',
-    //       priority: 0, // 最優先
-    //       action: {
-    //         block: {},
-    //       },
-    //       statement: {
-    //         rateBasedStatement: {
-    //           limit: 100, // 1分間あたり100リクエスト
-    //           aggregateKeyType: 'IP',
-    //         },
-    //       },
-    //       visibilityConfig: {
-    //         sampledRequestsEnabled: true,
-    //         cloudWatchMetricsEnabled: true,
-    //         metricName: 'RateLimitRule',
-    //       },
-    //     },
-    //   ],
-    // })
-
     // 6) HTTP API
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
       corsPreflight: {
-        allowOrigins: [
-          'http://localhost:5173',
-          `https://${props.webDistributionDomain}`,
+        allowOrigins: ['http://localhost:5173', `https://${props.webDistributionDomain}`],
+        allowMethods: [
+          apigwv2.CorsHttpMethod.GET,
+          apigwv2.CorsHttpMethod.POST,
+          apigwv2.CorsHttpMethod.PUT,
+          apigwv2.CorsHttpMethod.OPTIONS,
         ],
-        allowMethods: [apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST, apigwv2.CorsHttpMethod.PUT, apigwv2.CorsHttpMethod.OPTIONS],
-        allowHeaders: ['authorization', 'content-type'],
+        // 大文字小文字揺れに備えて両方許可（ブラウザ/ライブラリ差異対策）
+        allowHeaders: ['authorization', 'Authorization', 'content-type', 'Content-Type'],
       },
     })
 
-    // HTTP API Stage（極端に低いスロットリング設定）
-    // 既存の$defaultステージを更新するため、CfnStageを使用
-    const httpStage = new apigwv2.CfnStage(this, 'HttpStage', {
-      apiId: httpApi.apiId,
-      stageName: '$default',
-      // 極端に低いスロットリング: 1秒あたり2リクエスト、バースト5
-      defaultRouteSettings: {
-        throttlingRateLimit: 2,      // 1秒あたり2リクエスト（過剰リクエストを完全にブロック）
-        throttlingBurstLimit: 5,     // バースト時5リクエスト
-      },
-    })
-
-    // WAFをAPI Gatewayにアタッチ
-    // 注意: HTTP API (apigatewayv2) にはWAFを直接アタッチできません
-    // WAFを使う場合は REST API (apigateway) に切り替える必要があります
-    // または CloudFront + WAF (CLOUDFRONT scope) を前段に置く方法もあります
-    // 一旦、WAF Associationはコメントアウトしてデプロイを通します
-    // 
-    // const httpApiId = httpApi.apiId
-    // const httpApiStageArn = `arn:aws:apigateway:${this.region}::/apis/${httpApiId}/stages/$default`
-    // 
-    // new wafv2.CfnWebACLAssociation(this, 'ApiWebACLAssociation', {
-    //   resourceArn: httpApiStageArn,
-    //   webAclArn: webAcl.attrArn,
-    // })
+    // ★重要：$default stage を「新規作成」しない（Stage already exists 対策）
+    // 既存の defaultStage を更新してスロットリングを設定する
+    const cfnDefaultStage = httpApi.defaultStage?.node.defaultChild as apigwv2.CfnStage
+    if (cfnDefaultStage) {
+      cfnDefaultStage.defaultRouteSettings = {
+        throttlingRateLimit: 2, // 1秒あたり2リクエスト
+        throttlingBurstLimit: 5, // バースト時5リクエスト
+      }
+    }
 
     // 7) JWT Authorizer
     const jwtAuthorizer = new authorizers.HttpJwtAuthorizer(
@@ -425,7 +350,6 @@ export class ApiStack extends cdk.Stack {
     })
 
     // 9) CloudWatch Alarms（最小限に削減: エラー通知がある場合のみ）
-    // 利用されない予定なので、アラームは最小限に（または完全に無効化）
     if (errorTopic) {
       // 重大なエラーのみ監視（API Gatewayの5xxエラーのみ）
       const apiServerErrorAlarm = new cloudwatch.Alarm(this, 'ApiServerErrorRateAlarm', {
@@ -446,7 +370,7 @@ export class ApiStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ApiUrl', { value: httpApi.apiEndpoint })
     new cdk.CfnOutput(this, 'TableName', { value: table.tableName })
     if (errorTopic) {
-      new cdk.CfnOutput(this, 'ErrorTopicArn', { 
+      new cdk.CfnOutput(this, 'ErrorTopicArn', {
         value: errorTopic.topicArn,
         description: 'SNS Topic ARN for error notifications',
       })
