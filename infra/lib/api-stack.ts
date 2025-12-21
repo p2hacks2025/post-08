@@ -17,6 +17,7 @@ import * as sns from 'aws-cdk-lib/aws-sns'
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions'
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs'
 import * as path from 'path'
+import * as logs from 'aws-cdk-lib/aws-logs'
 
 type Props = cdk.StackProps & {
   userPool: cognito.UserPool
@@ -48,146 +49,133 @@ export class ApiStack extends cdk.Stack {
     const vapidSecretName = 'handwash/vapid'
     const vapidSecret = secretsmanager.Secret.fromSecretNameV2(this, 'VapidSecret', vapidSecretName)
 
-    // 3) SNS Topic for error notifications
-    const errorTopic = new sns.Topic(this, 'ErrorNotificationTopic', {
+    // 3) SNS Topic for error notifications（オプション: メール通知が必要な場合のみ）
+    const errorTopic = props.alertEmail ? new sns.Topic(this, 'ErrorNotificationTopic', {
       displayName: 'Handwash API Error Notifications',
-    })
+    }) : undefined
     
     // メールアドレスが指定されている場合はサブスクリプションを追加
-    if (props.alertEmail) {
+    if (props.alertEmail && errorTopic) {
       errorTopic.addSubscription(
         new subscriptions.EmailSubscription(props.alertEmail)
       )
     }
 
-    // 3) Lambda functions（TSをバンドル）
+    // 3) Lambda functions（コスト最適化: 最小限の設定）
     const lambdaEnv = { 
       TABLE_NAME: table.tableName,
-      ERROR_TOPIC_ARN: errorTopic.topicArn,
+      ...(errorTopic && { ERROR_TOPIC_ARN: errorTopic.topicArn }),
+    }
+
+    // 共通のLambda設定（極端に低コスト設定）
+    const defaultLambdaProps = {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      tracing: lambda.Tracing.DISABLED, // X-Ray完全無効化（コスト削減）
+      timeout: cdk.Duration.seconds(5), // タイムアウトを短縮
+      memorySize: 128, // 最小メモリサイズ
+      logRetention: logs.RetentionDays.ONE_DAY, // ログ保持期間1日（コスト削減）
     }
 
     const meFn = new NodejsFunction(this, 'MeFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'me.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE, // X-Rayトレーシングを有効化
-      timeout: cdk.Duration.seconds(10),
     })
 
     const createFamilyFn = new NodejsFunction(this, 'CreateFamilyFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'create-family.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(10),
     })
 
     const listFamiliesFn = new NodejsFunction(this, 'ListFamiliesFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'list-families.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(10),
     })
 
     const joinFamilyFn = new NodejsFunction(this, 'JoinFamilyFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'join-family.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(10),
     })
 
     const createHandwashEventFn = new NodejsFunction(this, 'CreateHandwashEventFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'create-handwash-event.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(10),
     })
 
     const listHandwashEventsFn = new NodejsFunction(this, 'ListHandwashEventsFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'list-handwash-events.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(10),
     })
 
     const pushSubscribeFn = new NodejsFunction(this, 'PushSubscribeFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'push-subscribe.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(10),
     })
 
     const sendReminderFn = new NodejsFunction(this, 'SendReminderFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'send-reminder.ts'),
       handler: 'handler',
       environment: {
         ...lambdaEnv,
         VAPID_SECRET_NAME: vapidSecretName,
       },
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 512,
+      timeout: cdk.Duration.minutes(2), // リマインダーは少し長め
+      memorySize: 256, // リマインダーは少し多め
     })
 
     const listFamilyMembersFn = new NodejsFunction(this, 'ListFamilyMembersFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'list-family-members.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(10),
     })
 
     const sendPushToUserFn = new NodejsFunction(this, 'SendPushToUserFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'send-push-to-user.ts'),
       handler: 'handler',
       environment: {
         ...lambdaEnv,
         VAPID_SECRET_NAME: vapidSecretName,
       },
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 256, // プッシュ通知は少し多め
     })
 
     const leaveFamilyFn = new NodejsFunction(this, 'LeaveFamilyFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'leave-family.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(10),
     })
 
     const deleteFamilyFn = new NodejsFunction(this, 'DeleteFamilyFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'delete-family.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(10),
     })
 
     const updateProfileFn = new NodejsFunction(this, 'UpdateProfileFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      ...defaultLambdaProps,
       entry: path.join(__dirname, '..', 'lambda', 'update-profile.ts'),
       handler: 'handler',
       environment: lambdaEnv,
-      tracing: lambda.Tracing.ACTIVE,
-      timeout: cdk.Duration.seconds(10),
     })
 
     // 4) Permissions
@@ -215,20 +203,16 @@ export class ApiStack extends cdk.Stack {
     // プロファイル更新
     table.grantReadWriteData(updateProfileFn)
 
-    // SNS Topicへのパブリッシュ権限をすべてのLambda関数に付与
-    errorTopic.grantPublish(meFn)
-    errorTopic.grantPublish(createFamilyFn)
-    errorTopic.grantPublish(listFamiliesFn)
-    errorTopic.grantPublish(joinFamilyFn)
-    errorTopic.grantPublish(createHandwashEventFn)
-    errorTopic.grantPublish(listHandwashEventsFn)
-    errorTopic.grantPublish(pushSubscribeFn)
-    errorTopic.grantPublish(sendReminderFn)
-    errorTopic.grantPublish(listFamilyMembersFn)
-    errorTopic.grantPublish(sendPushToUserFn)
-    errorTopic.grantPublish(leaveFamilyFn)
-    errorTopic.grantPublish(deleteFamilyFn)
-    errorTopic.grantPublish(updateProfileFn)
+    // SNS Topicへのパブリッシュ権限（エラー通知がある場合のみ）
+    if (errorTopic) {
+      const lambdaFunctions = [
+        meFn, createFamilyFn, listFamiliesFn, joinFamilyFn,
+        createHandwashEventFn, listHandwashEventsFn, pushSubscribeFn,
+        sendReminderFn, listFamilyMembersFn, sendPushToUserFn,
+        leaveFamilyFn, deleteFamilyFn, updateProfileFn,
+      ]
+      lambdaFunctions.forEach(fn => errorTopic.grantPublish(fn))
+    }
 
     // 5) EventBridge Scheduler for daily reminder (20:00 JST = 11:00 UTC)
     new events.Rule(this, 'ReminderSchedule', {
@@ -310,7 +294,7 @@ export class ApiStack extends cdk.Stack {
     //   ],
     // })
 
-    // 6) HTTP API
+    // 6) HTTP API（極端に低いスロットリング設定）
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
       corsPreflight: {
         allowOrigins: [
@@ -319,6 +303,11 @@ export class ApiStack extends cdk.Stack {
         ],
         allowMethods: [apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST, apigwv2.CorsHttpMethod.PUT, apigwv2.CorsHttpMethod.OPTIONS],
         allowHeaders: ['authorization', 'content-type'],
+      },
+      // 極端に低いスロットリング: 1秒あたり2リクエスト、バースト5
+      throttle: {
+        rateLimit: 2,      // 1秒あたり2リクエスト（過剰リクエストを完全にブロック）
+        burstLimit: 5,     // バースト時5リクエスト
       },
     })
 
@@ -428,82 +417,32 @@ export class ApiStack extends cdk.Stack {
       authorizer: jwtAuthorizer,
     })
 
-    // 9) CloudWatch Alarms
-    // Lambda関数のエラー率監視
-    const lambdaFunctions = [
-      { name: 'Me', fn: meFn },
-      { name: 'CreateFamily', fn: createFamilyFn },
-      { name: 'ListFamilies', fn: listFamiliesFn },
-      { name: 'JoinFamily', fn: joinFamilyFn },
-      { name: 'CreateHandwashEvent', fn: createHandwashEventFn },
-      { name: 'ListHandwashEvents', fn: listHandwashEventsFn },
-      { name: 'PushSubscribe', fn: pushSubscribeFn },
-      { name: 'SendReminder', fn: sendReminderFn },
-      { name: 'ListFamilyMembers', fn: listFamilyMembersFn },
-      { name: 'SendPushToUser', fn: sendPushToUserFn },
-      { name: 'LeaveFamily', fn: leaveFamilyFn },
-      { name: 'DeleteFamily', fn: deleteFamilyFn },
-      { name: 'UpdateProfile', fn: updateProfileFn },
-    ]
-
-    lambdaFunctions.forEach(({ name, fn }) => {
-      // エラー率アラーム（5分間で1回以上のエラー）
-      const errorAlarm = new cloudwatch.Alarm(this, `${name}ErrorAlarm`, {
-        metric: fn.metricErrors({
-          period: cdk.Duration.minutes(5),
+    // 9) CloudWatch Alarms（最小限に削減: エラー通知がある場合のみ）
+    // 利用されない予定なので、アラームは最小限に（または完全に無効化）
+    if (errorTopic) {
+      // 重大なエラーのみ監視（API Gatewayの5xxエラーのみ）
+      const apiServerErrorAlarm = new cloudwatch.Alarm(this, 'ApiServerErrorRateAlarm', {
+        metric: httpApi.metricServerError({
+          period: cdk.Duration.minutes(15), // 評価頻度を下げる
           statistic: 'Sum',
         }),
-        threshold: 1, // 5分間で1回以上のエラー
+        threshold: 10, // 15分間で10回以上の5xxエラー
         evaluationPeriods: 1,
-        alarmDescription: `Error alarm for ${name} function`,
+        alarmDescription: 'API Gateway server error rate alarm',
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       })
 
-      // レイテンシーアラーム（P99が3秒を超えた場合）
-      const latencyAlarm = new cloudwatch.Alarm(this, `${name}LatencyAlarm`, {
-        metric: fn.metricDuration({
-          period: cdk.Duration.minutes(5),
-          statistic: 'p99',
-        }),
-        threshold: 3000, // 3秒（ミリ秒）
-        evaluationPeriods: 2,
-        alarmDescription: `Latency alarm for ${name} function`,
-      })
-
-      // アラームが発火したらSNSに通知
-      errorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(errorTopic))
-      latencyAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(errorTopic))
-    })
-
-    // API Gatewayのエラー率監視
-    const apiErrorAlarm = new cloudwatch.Alarm(this, 'ApiErrorRateAlarm', {
-      metric: httpApi.metricClientError({
-        period: cdk.Duration.minutes(5),
-        statistic: 'Sum',
-      }),
-      threshold: 10, // 5分間で10回以上の4xxエラー
-      evaluationPeriods: 1,
-      alarmDescription: 'API Gateway client error rate alarm',
-    })
-
-    const apiServerErrorAlarm = new cloudwatch.Alarm(this, 'ApiServerErrorRateAlarm', {
-      metric: httpApi.metricServerError({
-        period: cdk.Duration.minutes(5),
-        statistic: 'Sum',
-      }),
-      threshold: 5, // 5分間で5回以上の5xxエラー
-      evaluationPeriods: 1,
-      alarmDescription: 'API Gateway server error rate alarm',
-    })
-
-    apiErrorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(errorTopic))
-    apiServerErrorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(errorTopic))
+      apiServerErrorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(errorTopic))
+    }
 
     // 10) Outputs
     new cdk.CfnOutput(this, 'ApiUrl', { value: httpApi.apiEndpoint })
     new cdk.CfnOutput(this, 'TableName', { value: table.tableName })
-    new cdk.CfnOutput(this, 'ErrorTopicArn', { 
-      value: errorTopic.topicArn,
-      description: 'SNS Topic ARN for error notifications',
-    })
+    if (errorTopic) {
+      new cdk.CfnOutput(this, 'ErrorTopicArn', { 
+        value: errorTopic.topicArn,
+        description: 'SNS Topic ARN for error notifications',
+      })
+    }
   }
 }
