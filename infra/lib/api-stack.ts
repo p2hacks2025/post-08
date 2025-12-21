@@ -294,7 +294,7 @@ export class ApiStack extends cdk.Stack {
     //   ],
     // })
 
-    // 6) HTTP API（極端に低いスロットリング設定）
+    // 6) HTTP API
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
       corsPreflight: {
         allowOrigins: [
@@ -304,6 +304,13 @@ export class ApiStack extends cdk.Stack {
         allowMethods: [apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST, apigwv2.CorsHttpMethod.PUT, apigwv2.CorsHttpMethod.OPTIONS],
         allowHeaders: ['authorization', 'content-type'],
       },
+      createDefaultStage: false, // デフォルトステージの自動作成を無効化
+    })
+
+    // HTTP API Stage（極端に低いスロットリング設定）
+    const httpStage = new apigwv2.HttpStage(this, 'HttpStage', {
+      httpApi,
+      stageName: '$default',
       // 極端に低いスロットリング: 1秒あたり2リクエスト、バースト5
       throttle: {
         rateLimit: 2,      // 1秒あたり2リクエスト（過剰リクエストを完全にブロック）
