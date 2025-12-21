@@ -242,8 +242,8 @@ export class ApiStack extends cdk.Stack {
           apigwv2.CorsHttpMethod.PUT,
           apigwv2.CorsHttpMethod.OPTIONS,
         ],
-        // 大文字小文字揺れに備えて両方許可（ブラウザ/ライブラリ差異対策）
-        allowHeaders: ['authorization', 'Authorization', 'content-type', 'Content-Type'],
+        // API Gatewayは大文字小文字を区別せず重複チェックするため、小文字に統一
+        allowHeaders: ['authorization', 'content-type'],
       },
     })
 
