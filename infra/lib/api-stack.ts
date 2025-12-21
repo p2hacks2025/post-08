@@ -304,17 +304,17 @@ export class ApiStack extends cdk.Stack {
         allowMethods: [apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST, apigwv2.CorsHttpMethod.PUT, apigwv2.CorsHttpMethod.OPTIONS],
         allowHeaders: ['authorization', 'content-type'],
       },
-      createDefaultStage: false, // デフォルトステージの自動作成を無効化
     })
 
     // HTTP API Stage（極端に低いスロットリング設定）
-    const httpStage = new apigwv2.HttpStage(this, 'HttpStage', {
-      httpApi,
+    // 既存の$defaultステージを更新するため、CfnStageを使用
+    const httpStage = new apigwv2.CfnStage(this, 'HttpStage', {
+      apiId: httpApi.apiId,
       stageName: '$default',
       // 極端に低いスロットリング: 1秒あたり2リクエスト、バースト5
-      throttle: {
-        rateLimit: 2,      // 1秒あたり2リクエスト（過剰リクエストを完全にブロック）
-        burstLimit: 5,     // バースト時5リクエスト
+      defaultRouteSettings: {
+        throttlingRateLimit: 2,      // 1秒あたり2リクエスト（過剰リクエストを完全にブロック）
+        throttlingBurstLimit: 5,     // バースト時5リクエスト
       },
     })
 
